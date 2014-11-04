@@ -1,0 +1,17 @@
+reddit:
+  username: rnicoll
+  password: blah
+
+daemons:
+  BTC:
+    network: testnet
+    port: 18332
+    config: /home/jrn/.bitcoin/bitcoin.conf
+  LTC:
+    network: testnet
+    port: 19332
+    config: /home/jrn/.litecoin/litecoin.conf
+  DOGE:
+    network: testnet
+    port: 44555
+    config: /home/jrn/.dogecoin/dogecoin.conf
