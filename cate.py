@@ -31,18 +31,18 @@ NETWORK_CODES = {
 #
 # proxy is the RPC proxy to the relevant daemon JSON-RPC interface
 # quantity is the number of coins to be sent, expressed as a decimal
-# change_address is a standard address to send change to
-# peer_public_key is the public key with which the payment and refund transactions must be signed
-# own_public_key is the public key this client signs the refund transaction with
+# peer_public_key is the public key with which the payment and refund transactions must be signed, expressed as CBase58Data
+# own_public_key is the public key this client signs the refund transaction with, expressed as CBase58Data
 # secret the secret value to be revealed for the payment transaction
 #
 # returns a CTransaction
-def build_tx1(proxy, quantity, own_public_key, peer_public_key, secret):
+def build_tx1(proxy, quantity, own_address, peer_address, secret):
   # TODO: Calculate fee usefully
   fee = Decimal(1.00000000)
   total_quantity_needed = quantity + fee
 
   total_in = Decimal(0.00000000)
+  txins = []
   for txout in proxy.listunspent(0):
     total_in += (txout['amount'] / COIN)
     txins.append(CMutableTxIn(txout['outpoint']))
@@ -61,12 +61,12 @@ def build_tx1(proxy, quantity, own_public_key, peer_public_key, secret):
     [
       OP_IF,
         OP_2DUP, # Multisig
-          OP_HASH160, Hash160(peer_public_key), OP_EQUALVERIFY,
-          OP_HASH160, Hash160(own_public_key), OP_EQUALVERIFY,
+          OP_HASH160, peer_address, OP_EQUALVERIFY,
+          OP_HASH160, own_address, OP_EQUALVERIFY,
           2, OP_CHECKMULTISIG,
       OP_ELSE,
         OP_DUP, # Single sig + hash
-          OP_HASH160, Hash160(peer_public_key), OP_EQUALVERIFY,
+          OP_HASH160, peer_address, OP_EQUALVERIFY,
           OP_CHECKSIGVERIFY,
           OP_HASH160, Hash160(secret), OP_EQUAL,
       OP_ENDIF
@@ -94,21 +94,57 @@ def build_tx1(proxy, quantity, own_public_key, peer_public_key, secret):
 #
 # proxy is the RPC proxy to the relevant daemon JSON-RPC interface
 # trade_id the ID of the trade, for use when generating the refund address
-# outpoint is the outpoint from TX1 from which the input should be taken
+# tx1 the (complete, signed) transaction to refund from
 # quantity the number of coins being refunded
-# own_key is the private key this client signs the refund transaction with. This must match
-# the key provided when generating TX1
+# own_address is the private address this client signs the refund transaction with. This must match
+#     the address provided when generating TX1.
 #
 # returns a CTransaction
-def build_tx2(proxy, outpoint, quantity, own_key):
-  txins = [CMutableTxIn(outpoint)]
-  # TODO: Allow fees out of the amount refunded
-  txouts = [CTxOut(quantity * COIN, address_own.to_scriptPubKey())]
-  tx = CMutableTransaction(txins, txouts)
+def build_tx2(proxy, tx1, quantity, own_address):
+  prev_txid = tx1.GetHash()
+  prev_out = tx1.vout[0]
+  txin = CMutableTxIn(COutPoint(prev_txid, 0))
+  txins = [txin]
 
   # TODO: Sign the transaction with our key
+  seckey = proxy.dumpprivkey(own_address)
 
-  return
+  txin_scriptPubKey = prev_out.scriptPubKey
+
+  # TODO: Allow fees out of the amount refunded
+  txouts = [CTxOut(quantity * COIN, own_address.to_scriptPubKey())]
+
+  # Create the unsigned transaction
+  tx = CMutableTransaction(txins, txouts)
+
+  # Calculate the signature hash for that transaction.
+  sighash = SignatureHash(txin_scriptPubKey, tx, 0, SIGHASH_ALL)
+
+  # Now sign it. We have to append the type of signature we want to the end, in
+  # this case the usual SIGHASH_ALL.
+  sig = seckey.sign(sighash) + bytes([SIGHASH_ALL])
+
+  # Set the scriptSig of our transaction input appropriately.
+  txin.scriptSig = CScript([sig, seckey.pub])
+
+  # Mutate the TX into something we can serialize?
+
+  return tx
+
+"""
+Generates a directory path within which to store audit details for a trade.
+Returns the path to the directory.
+"""
+def ensure_audit_directory_exists(trade_id):
+  if not os.path.isdir('audits'):
+    os.mkdir('audits')
+
+  # Log the incoming offer
+  audit_directory = 'audits' + os.path.sep + trade_id
+  if not os.path.isdir(audit_directory):
+    os.mkdir(audit_directory)
+
+  return audit_directory
 
 def load_configuration(filename):
   if not os.path.isfile(filename):

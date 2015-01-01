@@ -5,6 +5,7 @@ import hashlib
 import json
 import locale
 import os.path
+import socket
 from StringIO import StringIO
 import sys
 import re
@@ -66,7 +67,7 @@ def assert_offer_valid(offer):
 
   return
 
-def process_offer(offer_json):
+def process_offer(other_redditor, offer_json):
   """
   """
 
@@ -78,17 +79,14 @@ def process_offer(offer_json):
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
   offer_currency_quantity = Decimal(offer['offer_currency_quantity'])
   ask_currency_quantity = Decimal(offer['ask_currency_quantity'])
-  ask_address = offer['ask_address']
+  ask_address = bitcoin.base58.CBase58Data(offer['ask_address'])
 
   # We validate the trade ID already, but double check here
   if trade_id.find(os.path.sep) != -1:
     raise Exception("Invalid trade ID received; trade must not contain path separators")
 
   # Log the incoming offer
-  audit_directory = 'audits' + os.path.sep + trade_id
-  if not os.path.isdir(audit_directory):
-    os.mkdir(audit_directory)
-
+  audit_directory = ensure_audit_directory_exists(trade_id)
   audit_filename = audit_directory + os.path.sep + 'received_offer.json'
   if os.path.isfile(audit_filename):
     print "Offer " + trade_id + " already received, ignoring offer"
@@ -99,12 +97,17 @@ def process_offer(offer_json):
       json.dump(offer, io, indent=4, separators=(',', ': '))
       audit_file.write(io.getvalue())
 
-  # TODO: Clean up this mess
   # TODO: Include details of who offered the trade
   print "Received offer " + trade_id + " of " + locale.format("%.8f", offer_currency_quantity, True) + " " + offer_currency_code + " for " \
     + locale.format("%.8f", ask_currency_quantity, True) + " " + ask_currency_code
 
   # TODO: Prompt the user for whether the trade is acceptable
+
+  # Connect to the daemon
+  # TODO: Check the configuration exists
+  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
+  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
+
   # TODO: If the trade is not acceptable, stop (send rejection notice?)
   # TODO: If the trade is acceptable:
   #	Generate a very large secret number (i.e. around 128 bits)
@@ -112,27 +115,23 @@ def process_offer(offer_json):
   with open(audit_directory + os.path.sep + 'secret.txt', "w", 0700) as secret_file:
     secret_file.write(secret)
 
-  # Connect to the daemon
-  # TODO: Check the configuration exists
-  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
-
-  # TODO: Generate a key for us and write it to disk
-  #own_private_key = None # https://github.com/weex/addrgen/blob/master/addrgen.py - see generate()
-  #own_public_key = None
-  # TODO Get key for the peer from the trade request
-  #peer_public_key = None
+  # TODO: Generate a key for us
+  try:
+    offer_address = proxy.getnewaddress("CATE " + other_redditor.name + " (" + trade_id + ")")
+  except socket.error:
+    print ("Could not connect to the wallet software; did you remember to use the \"-server\" option if running the QT client?")
+    sys.exit(1)
 
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
-  #tx1 = build_tx1(proxy, ask_currency_quantity, own_public_key, peer_public_key, secret)
-  #tx2 = build_tx2(proxy, tx1.vout[0], ask_currency_quantity, own_private_key)
+  tx1 = build_tx1(proxy, ask_currency_quantity, offer_address, ask_address, secret)
   #     Write TX1 and TX2 to directory
-  #with open(audit_directory + os.path.sep + 'tx2.txt', "w") as tx1_file:
-  #  tx1_file.write(tx1.serialize())
-  #with open(audit_directory + os.path.sep + 'tx2.txt', "w") as tx2_file:
-  #  tx2_file.write(tx2.serialize())
+  with open(audit_directory + os.path.sep + 'tx1.txt', "w") as tx1_file:
+    tx1_file.write(b2x(tx1.serialize()))
+  tx2 = build_tx2(proxy, tx1, ask_currency_quantity, offer_address)
+  with open(audit_directory + os.path.sep + 'tx2.txt', "w") as tx2_file:
+    tx2_file.write(b2x(tx2.serialize()))
 
-  #	Send TX2 to remote user along with our public key
+  #	Send TX2 to remote user along with our address
 
 
   #	Await signed TX2 and TX4 returned from remote user (another script to handle this)
@@ -160,7 +159,7 @@ if not os.path.isdir('audits'):
 for message in r.get_messages():
   if message.subject == "CATE transaction offer":
     try:
-      process_offer(message.body)
+      process_offer(message.author, message.body)
     # TODO: Should use a more specific exception
     except Exception as e:
       print e
