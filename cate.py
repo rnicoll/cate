@@ -1,5 +1,6 @@
 import praw
 from bitcoin.base58 import decode
+from decimal import Decimal
 import hashlib
 import os.path
 from StringIO import StringIO
@@ -28,48 +29,85 @@ NETWORK_CODES = {
 # Generates "TX1" from the guide at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
 # Pay w BTC to <B's public key> if (x for H(x) known and signed by B) or (signed by A & B)
 #
-# inputs is an array of inputs to the transaction
-# change_address is a standard address to send change to
+# proxy is the RPC proxy to the relevant daemon JSON-RPC interface
 # quantity is the number of coins to be sent, expressed as a decimal
+# change_address is a standard address to send change to
 # peer_public_key is the public key with which the payment and refund transactions must be signed
 # own_public_key is the public key this client signs the refund transaction with
 # secret the secret value to be revealed for the payment transaction
 #
 # returns a CTransaction
-def build_tx1(inputs, quantity, own_public_key, peer_public_key, secret):
+def build_tx1(proxy, quantity, own_public_key, peer_public_key, secret):
+  # TODO: Calculate fee usefully
+  fee = Decimal(1.00000000)
+  total_quantity_needed = quantity + fee
+
+  total_in = Decimal(0.00000000)
+  for txout in proxy.listunspent(0):
+    total_in += (txout['amount'] / COIN)
+    txins.append(CMutableTxIn(txout['outpoint']))
+    # TODO: Lock outputs?
+    if total_in >= total_quantity_needed:
+      break
+
+  if total_in < total_quantity_needed:
+    raise Exception('Insufficient funds.')
+
   # scriptSig is either:
-  # 0 <signature B> <signature A> 2 <A public key> <B public key> 2
-  # <shared secret> <signature B> <B public key> 0
-  script = CScript(
+  #     0 <signature B> <signature A> 2 <A public key> <B public key> 2
+  # or
+  #     <shared secret> <signature B> <B public key> 0
+  tx_script = CScript(
     [
       OP_IF,
         OP_2DUP, # Multisig
-          OP_HASH160, hash(peer_public_key), OP_EQUALVERIFY,
-          OP_HASH160, hash(own_public_key), OP_EQUALVERIFY,
+          OP_HASH160, Hash160(peer_public_key), OP_EQUALVERIFY,
+          OP_HASH160, Hash160(own_public_key), OP_EQUALVERIFY,
           2, OP_CHECKMULTISIG,
       OP_ELSE,
         OP_DUP, # Single sig + hash
-          OP_HASH160, hash(peer_public_key), OP_EQUALVERIFY,
+          OP_HASH160, Hash160(peer_public_key), OP_EQUALVERIFY,
           OP_CHECKSIGVERIFY,
-          OP_HASH160, hash(secret), OP_EQUAL,
+          OP_HASH160, Hash160(secret), OP_EQUAL,
       OP_ENDIF
     ]
   )
+  txout = CTxOut(quantity * COIN, tx_script)
+  txouts = [txout]
 
-  return
+  # Generate a change transaction if needed
+  if total_in > total_quantity_needed:
+    change = total_in - total_quantity_needed
+    change_address = proxy.getrawchangeaddress()
+    change_txout = CTxOut(change * COIN, change_address.to_scriptPubKey())
+    txouts.append(change_txout)
+
+  tx = CMutableTransaction(txins, txouts)
+  tx_signed = proxy.signrawtransaction(tx)
+  if not tx_signed['complete']:
+      raise Exception('Transaction came back without all inputs signed.')
+
+  return tx_signed['tx']
 
 # Generates "TX2" from the guide at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
 # Pay w BTC from TX1 to <A's public key>, locked 48 hours in the future, signed by A
 #
-# inputs is an array of inputs to the transaction
-# change_address is a standard address to send change to
-# quantity is the number of coins to be sent, expressed as a decimal
-# peer_public_key is the public key with which the payment and refund transactions must be signed
-# own_public_key is the public key this client signs the refund transaction with
-# secret the secret value to be revealed for the payment transaction
+# proxy is the RPC proxy to the relevant daemon JSON-RPC interface
+# trade_id the ID of the trade, for use when generating the refund address
+# outpoint is the outpoint from TX1 from which the input should be taken
+# quantity the number of coins being refunded
+# own_key is the private key this client signs the refund transaction with. This must match
+# the key provided when generating TX1
 #
 # returns a CTransaction
-def build_tx2(tx1, own_key):
+def build_tx2(proxy, outpoint, quantity, own_key):
+  txins = [CMutableTxIn(outpoint)]
+  # TODO: Allow fees out of the amount refunded
+  txouts = [CTxOut(quantity * COIN, address_own.to_scriptPubKey())]
+  tx = CMutableTransaction(txins, txouts)
+
+  # TODO: Sign the transaction with our key
+
   return
 
 def load_configuration(filename):

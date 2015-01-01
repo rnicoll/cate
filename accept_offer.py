@@ -108,10 +108,34 @@ def process_offer(offer_json):
   # TODO: If the trade is not acceptable, stop (send rejection notice?)
   # TODO: If the trade is acceptable:
   #	Generate a very large secret number (i.e. around 128 bits)
+  secret = os.urandom(16)
+  with open(audit_directory + os.path.sep + 'secret.txt', "w", 0700) as secret_file:
+    secret_file.write(secret)
+
+  # Connect to the daemon
+  # TODO: Check the configuration exists
+  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
+  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
+
+  # TODO: Generate a key for us and write it to disk
+  #own_private_key = None # https://github.com/weex/addrgen/blob/master/addrgen.py - see generate()
+  #own_public_key = None
+  # TODO Get key for the peer from the trade request
+  #peer_public_key = None
+
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
+  #tx1 = build_tx1(proxy, ask_currency_quantity, own_public_key, peer_public_key, secret)
+  #tx2 = build_tx2(proxy, tx1.vout[0], ask_currency_quantity, own_private_key)
   #     Write TX1 and TX2 to directory
-  #	Send TX2 to remote user
-  #	Await TX4 returned from remote user (another script to handle this)
+  #with open(audit_directory + os.path.sep + 'tx2.txt', "w") as tx1_file:
+  #  tx1_file.write(tx1.serialize())
+  #with open(audit_directory + os.path.sep + 'tx2.txt', "w") as tx2_file:
+  #  tx2_file.write(tx2.serialize())
+
+  #	Send TX2 to remote user along with our public key
+
+
+  #	Await signed TX2 and TX4 returned from remote user (another script to handle this)
 
   return True
 
