@@ -68,7 +68,7 @@ def build_tx1(proxy, quantity, own_address, peer_address, secret):
         OP_DUP, # Single sig + hash
           OP_HASH160, peer_address, OP_EQUALVERIFY,
           OP_CHECKSIGVERIFY,
-          OP_HASH160, Hash160(secret), OP_EQUAL,
+          OP_HASH256, Hash(secret), OP_EQUAL,
       OP_ENDIF
     ]
   )

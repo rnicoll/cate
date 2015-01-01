@@ -128,11 +128,24 @@ def process_offer(other_redditor, offer_json):
   with open(audit_directory + os.path.sep + 'tx1.txt', "w") as tx1_file:
     tx1_file.write(b2x(tx1.serialize()))
   tx2 = build_tx2(proxy, tx1, ask_currency_quantity, offer_address)
-  with open(audit_directory + os.path.sep + 'tx2.txt', "w") as tx2_file:
+  with open(audit_directory + os.path.sep + 'tx2_partial.txt', "w") as tx2_file:
     tx2_file.write(b2x(tx2.serialize()))
 
   #	Send TX2 to remote user along with our address
+  response = {
+    'trade_id': trade_id,
+    'offer_address': offer_address.__str__(),
+    'secret_hash': b2x(Hash(secret)),
+    'tx2': b2x(tx2.serialize())
+  }
+  io = StringIO()
+  json.dump(response, io)
 
+  # Record the offer
+  with open(audit_directory + os.path.sep + 'offer_acceptance.json', "w", 0700) as response_file:
+    response_file.write(io.getvalue())
+
+  r.send_message(other_redditor, 'CATE transaction accepted', io.getvalue())
 
   #	Await signed TX2 and TX4 returned from remote user (another script to handle this)
 
