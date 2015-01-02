@@ -14,13 +14,10 @@ from bitcoin.core.script import *
 import bitcoin.rpc
 from cate import *
 
-# 'B':
-# 1. Receives the partial TX2 and hash value for the secret from 'A'.
-# 2. Verifies lock time on TX2 is valid
-# 3. Signs TX2 to complete it
-# 4. Generates TX3 and signs it
-# 5. Generates TX4 and signs it
-# 4. Returns the partial TX4 to 'A'
+# 'B' receives the completed TX4 from 'A', verifies the signatures on it
+# are valid, then submits TX3 to the network
+
+# TODO: Should use a more specific exception
 try:
   config = load_configuration("config.yml")
 except Exception as e:
@@ -36,9 +33,9 @@ except Exception as e:
   sys.exit(0)
 
 for message in r.get_messages():
-  if message.subject == "CATE transaction accepted":
+  if message.subject == "CATE TX4 signed":
     try:
-      process_offer_accepted(message.author, message.body)
+      process_tx4(message.author, message.body)
     # TODO: Should use a more specific exception
     except Exception as e:
       print e

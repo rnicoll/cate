@@ -116,6 +116,7 @@ def build_tx2(proxy, tx1, quantity, own_address):
 
   # Create the unsigned transaction
   tx = CMutableTransaction(txins, txouts)
+  # FIXME: Set lock time
 
   # Calculate the signature hash for that transaction.
   sighash = SignatureHash(txin_scriptPubKey, tx, 0, SIGHASH_ALL)
