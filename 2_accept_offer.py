@@ -11,10 +11,8 @@ import sys
 import re
 
 from bitcoin import SelectParams
-from bitcoin.core import *
-from bitcoin.core.script import *
 import bitcoin.rpc
-from cate.cate import *
+from cate import *
 from cate.fees import CFeeRate
 
 def assert_offer_valid(offer):
@@ -43,22 +41,20 @@ def assert_offer_valid(offer):
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
 
-  if not offer['offer_currency_quantity'].isnumeric():
+  if not isinstance( offer['offer_currency_quantity'], ( int, long ) ):
     raise Exception( "Offered currency quantity is not a number.")
-      
-  if not offer['ask_currency_quantity'].isnumeric():
-    raise Exception( "Asked currency quantity is not a number.")
-      
-  offer_currency_quantity = Decimal(offer['offer_currency_quantity'])
-  ask_currency_quantity = Decimal(offer['ask_currency_quantity'])
 
-  if offer_currency_quantity < 0.00000001:
+  if not isinstance( offer['ask_currency_quantity'], ( int, long ) ):
+    raise Exception( "Asked currency quantity is not a number.")
+
+  offer_currency_quantity = offer['offer_currency_quantity']
+  ask_currency_quantity = offer['ask_currency_quantity']
+
+  if offer_currency_quantity < 1:
     raise Exception( "Offered currency quantity is below minimum trade value.")
 
-  if ask_currency_quantity < 0.00000001:
+  if ask_currency_quantity < 1:
     raise Exception( "Asked currency quantity is below minimum trade value.")
-
-  # TODO: Ensure there's no data past the 8th digit in the quantity
 
   if not validate_address(offer['ask_address']):
     raise Exception( "Address to send coins to is invalid.")
@@ -80,8 +76,8 @@ def process_offer(other_redditor, offer_json):
   trade_id = offer['trade_id']
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
-  offer_currency_quantity = Decimal(offer['offer_currency_quantity']) * COIN
-  ask_currency_quantity = Decimal(offer['ask_currency_quantity']) * COIN
+  offer_currency_quantity = offer['offer_currency_quantity']
+  ask_currency_quantity = offer['ask_currency_quantity']
   ask_address = bitcoin.base58.CBase58Data(offer['ask_address'])
 
   # We validate the trade ID already, but double check here
@@ -101,8 +97,9 @@ def process_offer(other_redditor, offer_json):
       audit_file.write(io.getvalue())
 
   # TODO: Include details of who offered the trade
-  print "Received offer " + trade_id + " of " + locale.format("%.8f", offer_currency_quantity, True) + " " + offer_currency_code + " for " \
-    + locale.format("%.8f", ask_currency_quantity, True) + " " + ask_currency_code
+  print "Received offer " + trade_id + " of " \
+    + locale.format("%.8f", Decimal(offer_currency_quantity) / COIN, True) + " " + offer_currency_code + " for " \
+    + locale.format("%.8f", Decimal(ask_currency_quantity) / COIN, True) + " " + ask_currency_code
 
   # TODO: Prompt the user for whether the trade is acceptable
 

@@ -1,5 +1,4 @@
 import praw
-import hashlib
 import json
 import os.path
 from StringIO import StringIO
@@ -8,10 +7,9 @@ import sys
 import uuid
 
 import bitcoin
-from bitcoin.base58 import decode
 from bitcoin.wallet import CBitcoinSecret, P2PKHBitcoinAddress
 import bitcoin.rpc
-from cate.cate import *
+from cate import *
 
 def input_currency_code(prompt):
   """
@@ -67,13 +65,13 @@ while target_redditor == None:
 
 offer_currency_code = input_currency_code("What currency are you offering, and how much?")
 
-while offer_currency_quantity < 1:
-  offer_currency_quantity = raw_input("Quantity offered: ")
+while offer_currency_quantity < Decimal(0.00000001):
+  offer_currency_quantity = Decimal(raw_input("Quantity offered: "))
 
 ask_currency_code = input_currency_code("What currency are you wanting, and how much?")
     
-while ask_currency_quantity < 1:
-  ask_currency_quantity = raw_input("Quantity asked: ")
+while ask_currency_quantity < Decimal(0.00000001):
+  ask_currency_quantity = Decimal(raw_input("Quantity asked: "))
 
 # Generate a private key and matching address
 bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
@@ -89,10 +87,10 @@ except socket.error:
 trade = {
   'trade_id': trade_id,
   'offer_currency_hash': NETWORK_HASHES[offer_currency_code],
-  'offer_currency_quantity': offer_currency_quantity,
+  'offer_currency_quantity': int(offer_currency_quantity * COIN),
   'ask_address': ask_address.__str__(),
   'ask_currency_hash': NETWORK_HASHES[ask_currency_code],
-  'ask_currency_quantity': ask_currency_quantity
+  'ask_currency_quantity': int(ask_currency_quantity * COIN)
 }
 
 io = StringIO()
