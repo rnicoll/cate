@@ -1,7 +1,7 @@
 import praw
-from bitcoin.base58 import decode
+import calendar
+import datetime
 from decimal import Decimal
-import hashlib
 import json
 import locale
 import os.path
@@ -14,7 +14,8 @@ from bitcoin import SelectParams
 from bitcoin.core import *
 from bitcoin.core.script import *
 import bitcoin.rpc
-from cate import *
+from cate.cate import *
+from cate.fees import CFeeRate
 
 def assert_offer_valid(offer):
   """
@@ -69,6 +70,8 @@ def assert_offer_valid(offer):
 
 def process_offer(other_redditor, offer_json):
   """
+  Parses and validates an offer from step 1, and if the user agrees to the offer,
+  generates the "send" and "refund" transactions.
   """
 
   offer = json.loads(offer_json)
@@ -77,8 +80,8 @@ def process_offer(other_redditor, offer_json):
   trade_id = offer['trade_id']
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
-  offer_currency_quantity = Decimal(offer['offer_currency_quantity'])
-  ask_currency_quantity = Decimal(offer['ask_currency_quantity'])
+  offer_currency_quantity = Decimal(offer['offer_currency_quantity']) * COIN
+  ask_currency_quantity = Decimal(offer['ask_currency_quantity']) * COIN
   ask_address = bitcoin.base58.CBase58Data(offer['ask_address'])
 
   # We validate the trade ID already, but double check here
@@ -103,19 +106,21 @@ def process_offer(other_redditor, offer_json):
 
   # TODO: Prompt the user for whether the trade is acceptable
 
+  # TODO: If the trade is not acceptable, stop (send rejection notice?)
+  # TODO: If the trade is acceptable, continue
+
   # Connect to the daemon
   # TODO: Check the configuration exists
   bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
 
-  # TODO: If the trade is not acceptable, stop (send rejection notice?)
-  # TODO: If the trade is acceptable:
+  fee_rate = CFeeRate(config['daemons'][ask_currency_code]['fee_per_kb'])
+  
   #	Generate a very large secret number (i.e. around 128 bits)
   secret = os.urandom(16)
   with open(audit_directory + os.path.sep + 'secret.txt', "w", 0700) as secret_file:
     secret_file.write(secret)
 
-  # TODO: Generate a key for us
   try:
     offer_address = proxy.getnewaddress("CATE " + other_redditor.name + " (" + trade_id + ")")
   except socket.error:
@@ -123,11 +128,14 @@ def process_offer(other_redditor, offer_json):
     sys.exit(1)
 
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
-  tx1 = build_tx1(proxy, ask_currency_quantity, offer_address, ask_address, secret)
-  #     Write TX1 and TX2 to directory
+  lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+  lock_time = calendar.timegm(lock_datetime.timetuple())
+  tx1 = build_tx1(proxy, ask_currency_quantity, offer_address, ask_address, secret, fee_rate)
+  tx2 = build_tx2(proxy, tx1, lock_time, offer_address, fee_rate)
+
+  #     Write TX1 and TX2 to audit directory
   with open(audit_directory + os.path.sep + 'tx1.txt', "w") as tx1_file:
     tx1_file.write(b2x(tx1.serialize()))
-  tx2 = build_tx2(proxy, tx1, ask_currency_quantity, offer_address)
   with open(audit_directory + os.path.sep + 'tx2_partial.txt', "w") as tx2_file:
     tx2_file.write(b2x(tx2.serialize()))
 
@@ -171,9 +179,4 @@ if not os.path.isdir('audits'):
 
 for message in r.get_messages():
   if message.subject == "CATE transaction offer":
-    try:
-      process_offer(message.author, message.body)
-    # TODO: Should use a more specific exception
-    except Exception as e:
-      print e
-      sys.exit(0)
+    process_offer(message.author, message.body)

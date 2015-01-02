@@ -11,7 +11,7 @@ import bitcoin
 from bitcoin.base58 import decode
 from bitcoin.wallet import CBitcoinSecret, P2PKHBitcoinAddress
 import bitcoin.rpc
-from cate import *
+from cate.cate import *
 
 def input_currency_code(prompt):
   """
