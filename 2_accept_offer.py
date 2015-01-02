@@ -13,6 +13,7 @@ import re
 from bitcoin import SelectParams
 import bitcoin.rpc
 from cate import *
+from cate.tx import *
 from cate.fees import CFeeRate
 
 def assert_offer_valid(offer):
@@ -64,14 +65,11 @@ def assert_offer_valid(offer):
 
   return
 
-def process_offer(other_redditor, offer_json):
+def process_offer(other_redditor, offer):
   """
   Parses and validates an offer from step 1, and if the user agrees to the offer,
   generates the "send" and "refund" transactions.
   """
-
-  offer = json.loads(offer_json)
-  assert_offer_valid(offer)
 
   trade_id = offer['trade_id']
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
@@ -125,7 +123,7 @@ def process_offer(other_redditor, offer_json):
     sys.exit(1)
 
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
-  lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+  lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
   lock_time = calendar.timegm(lock_datetime.timetuple())
   tx1 = build_tx1(proxy, ask_currency_quantity, offer_address, ask_address, secret, fee_rate)
   tx2 = build_tx2(proxy, tx1, lock_time, offer_address, fee_rate)
@@ -176,4 +174,8 @@ if not os.path.isdir('audits'):
 
 for message in r.get_messages():
   if message.subject == "CATE transaction offer":
-    process_offer(message.author, message.body)
+    offer = json.loads(message.body)
+    assert_offer_valid(offer)
+
+    if not process_offer(message.author, offer):
+      break
