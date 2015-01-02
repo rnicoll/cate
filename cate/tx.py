@@ -70,7 +70,7 @@ def find_inputs(proxy, quantity):
 
   return (txins, total_in)
 
-def build_tx1_cscript(own_public_key, peer_public_key, secret_hash):
+def build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash):
   """
   Generates the script for TX1/TX3's main output (i.e. not the change output)
   """
@@ -83,19 +83,19 @@ def build_tx1_cscript(own_public_key, peer_public_key, secret_hash):
     [
       OP_IF,
         OP_2DUP, # Multisig
-          OP_HASH256, Hash(own_public_key), OP_EQUALVERIFY,
-          OP_HASH256, Hash(peer_public_key), OP_EQUALVERIFY,
+          OP_HASH256, Hash(public_key_a), OP_EQUALVERIFY,
+          OP_HASH256, Hash(public_key_b), OP_EQUALVERIFY,
           2, OP_CHECKMULTISIG,
       OP_ELSE,
         OP_DUP, # Single sig + hash
-          OP_HASH256, Hash(peer_public_key), OP_EQUALVERIFY,
+          OP_HASH256, Hash(public_key_b), OP_EQUALVERIFY,
           OP_CHECKSIGVERIFY,
           OP_HASH256, secret_hash, OP_EQUAL,
       OP_ENDIF
     ]
   )
 
-def build_tx1(proxy, quantity, own_public_key, peer_public_key, secret_hash, fee_rate):
+def build_tx1_tx3(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_rate):
   """
   Generates "TX1" from the guide at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
   Pay w BTC to <B's public key> if (x for H(x) known and signed by B) or (signed by A & B)
@@ -103,8 +103,8 @@ def build_tx1(proxy, quantity, own_public_key, peer_public_key, secret_hash, fee
   proxy is the RPC proxy to the relevant daemon JSON-RPC interface
   quantity is the number of coins to be sent, expressed as an integer quantity of the smallest
     unit (i.e. Satoshi)
-  peer_public_key is the public key with which the payment and refund transactions must be signed, expressed as CBase58Data
-  own_public_key is the public key this client signs the refund transaction with, expressed as CBase58Data
+  public_key_b is the public key with which the payment and refund transactions must be signed, expressed as CBase58Data
+  public_key_a is the public key this client signs the refund transaction with, expressed as CBase58Data
   secret_hash the secret value passed through SHA256 twice
 
   returns a CTransaction
@@ -113,7 +113,7 @@ def build_tx1(proxy, quantity, own_public_key, peer_public_key, secret_hash, fee
   quantity_inc_fee = quantity + fee_rate.get_fee(2000)
   (txins, total_in) = find_inputs(proxy, quantity_inc_fee)
 
-  txout = CTxOut(quantity, build_tx1_cscript(own_public_key, peer_public_key, secret_hash))
+  txout = CTxOut(quantity, build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash))
   txouts = [txout]
 
   # Generate a change transaction if needed
@@ -132,7 +132,7 @@ def build_tx1(proxy, quantity, own_public_key, peer_public_key, secret_hash, fee
 
   return tx_signed['tx']
 
-def build_unsigned_tx2(proxy, tx1, own_address, nLockTime, fee_rate):
+def build_unsigned_tx2_tx4(proxy, tx1, own_address, nLockTime, fee_rate):
   """
   Generates "TX2" from the guide at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading.
   The same code can also generate TX4. These are the refund transactions in case of
@@ -159,19 +159,12 @@ def build_unsigned_tx2(proxy, tx1, own_address, nLockTime, fee_rate):
   # Create the unsigned transaction
   return CMutableTransaction([txin], txouts, nLockTime)
 
-def build_tx3(proxy, quantity, own_address, peer_address, secret_hash, fee_rate):
-  return build_tx1(proxy, quantity, peer_address, own_address, secret_hash, fee_rate)
-
-def build_tx4(proxy, tx3, nLockTime, own_address, fee_rate):
-  return build_tx2(proxy, tx3, nLockTime, own_address, fee_rate)
-
-
 """
-Generate the spending transaction for TX3/TX1.
+Generate the spending transaction for TX1/TX3
 
 seckey is the secret key used to sign the transaction
 """
-def build_tx3_spend(proxy, tx1, secret, own_address):
+def build_tx1_tx3_spend(proxy, tx1, secret, own_address):
   fee = fee_rate.get_fee(1000)
 
   prev_txid = tx1.GetHash()
@@ -199,27 +192,15 @@ def build_tx3_spend(proxy, tx1, secret, own_address):
 
   return tx
 
-def get_tx2_signature(proxy, tx2, own_private_key, own_public_key, peer_public_key, secret_hash):
+def get_tx2_tx4_signature(proxy, tx2, own_private_key, public_key_a, public_key_b, secret_hash):
   # Rebuild the input script for TX1
   # Note the inputs are reversed because we're creating it from the peer's point of view
-  txin_scriptPubKey = build_tx1_cscript(own_public_key, peer_public_key, secret_hash)
+  txin_scriptPubKey = build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash)
 
   # Calculate the signature hash for the transaction.
   sighash = SignatureHash(txin_scriptPubKey, tx2, 0, SIGHASH_ALL)
 
   # Now sign it. We have to append the type of signature we want to the end, in
-  # this case the usual SIGHASH_ALL.
-  return own_private_key.sign(sighash) + bytes([SIGHASH_ALL])
-
-def sign_tx2(proxy, tx2, own_private_key, own_public_key, peer_public_key, secret_hash, peer_sig):
-  own_sig = get_tx2_signature(proxy, tx2, own_private_key, own_public_key, peer_public_key, secret_hash)
-
-  # scriptSig needs to be:
-  #     0 <signature B> <signature A> 2 <A public key> <B public key> 2
-
-  # Ensure TX2 is a mutable transaction
-  tx2 = CMutableTransaction.from_tx(tx2)
-
-  tx2.vin[0].scriptSig = CScript([0, peer_sig, own_sig, 2, peer_public_key, own_public_key, 2])
-
-  return tx2
+  # this case the usual SIGHASH_ALL. For some reason appending bytes gives us
+  # nonsense, so for now manually stuffing 0x01 on the end
+  return own_private_key.sign(sighash) + (b'\x01') # bytes([SIGHASH_ALL])

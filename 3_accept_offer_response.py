@@ -53,21 +53,21 @@ def process_offer_accepted(acceptance, audit_directory):
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
   fee_rate = CFeeRate(config['daemons'][offer_currency_code]['fee_per_kb'])
 
-  a_public_key = bitcoin.core.key.CPubKey(x(acceptance['a_public_key']))
+  public_key_a = bitcoin.core.key.CPubKey(x(acceptance['a_public_key']))
   with open(audit_directory + os.path.sep + '1_secret.txt', "r") as secret_file:
-    b_private_key = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
-  b_public_key = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
+    private_key_b = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
+  public_key_b = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
 
   assert_tx2_valid(tx2)
-  tx2_sig = get_tx2_signature(proxy, tx2, b_private_key, a_public_key, b_public_key, secret_hash)
+  tx2_sig = get_tx2_tx4_signature(proxy, tx2, private_key_b, public_key_a, public_key_b, secret_hash)
 
   # Generate TX3 & TX4, which are essentially the same as TX1 & TX2 except
   # that ask/offer details are reversed
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
   lock_time = calendar.timegm(lock_datetime.timetuple())
   own_address = proxy.getnewaddress("CATE refund " + trade_id)
-  tx3 = build_tx3(proxy, offer_currency_quantity, a_public_key, b_public_key, secret_hash, fee_rate)
-  tx4 = build_unsigned_tx2(proxy, tx3, own_address, lock_time, fee_rate)
+  tx3 = build_tx1_tx3(proxy, offer_currency_quantity, public_key_a, public_key_b, secret_hash, fee_rate)
+  tx4 = build_unsigned_tx2_tx4(proxy, tx3, own_address, lock_time, fee_rate)
 
   #     Write TX3 to audit directory as we don't send it yet
   with open(audit_directory + os.path.sep + '3_tx3.txt', "w") as tx3_file:
@@ -95,7 +95,6 @@ except ConfigurationError as e:
 for message in r.get_messages():
   if message.subject != "CATE transaction accepted (2)":
     continue
-
   acceptance = json.loads(message.body)
   assert_acceptance_valid(acceptance)
   trade_id = acceptance['trade_id']
@@ -123,4 +122,4 @@ for message in r.get_messages():
   with open(audit_directory + os.path.sep + '3_confirmation.json', "w", 0700) as response_file:
     response_file.write(io.getvalue())
 
-  # r.send_message(redditor, 'CATE transaction confirmed (3)', io.getvalue())
+  r.send_message(redditor, 'CATE transaction confirmed (3)', io.getvalue())

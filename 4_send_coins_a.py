@@ -46,9 +46,9 @@ def process_offer_confirmed(confirmation, audit_directory):
   ask_currency_quantity = offer['ask_currency_quantity']
   offer_currency_quantity = offer['offer_currency_quantity']
   with open(audit_directory + os.path.sep + '2_secret.txt', "r") as secret_file:
-    a_private_key = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
-  a_public_key = bitcoin.core.key.CPubKey(a_private_key._cec_key.get_pubkey())
-  b_public_key = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
+    private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
+  public_key_a = bitcoin.core.key.CPubKey(private_key_a._cec_key.get_pubkey())
+  public_key_b = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
   secret_hash = x(acceptance['secret_hash'])
 
   # Connect to the daemon
@@ -58,36 +58,30 @@ def process_offer_confirmed(confirmation, audit_directory):
 
   with open(audit_directory + os.path.sep + '2_tx1.txt', "r") as tx1_file:
     tx1 = CTransaction.deserialize(x(tx1_file.read()))
-  tx2 = CMutableTransaction.deserialize(x(acceptance['tx2']))
-  tx4 = CMutableTransaction.deserialize(x(confirmation['tx4']))
+  tx2 = CMutableTransaction.from_tx(CTransaction.deserialize(x(acceptance['tx2'])))
+  tx4 = CTransaction.deserialize(x(confirmation['tx4']))
 
-  print a_public_key
-  print b_public_key
-  print b2x(Hash(a_public_key))
-  print b2x(Hash(b_public_key))
-  
-  print ""
-  print tx1
+  # Apply signatures to TX2 and check the result is valid
+  txin_scriptPubKey = tx1.vout[0].scriptPubKey
+  sighash = SignatureHash(txin_scriptPubKey, tx2, 0, SIGHASH_ALL)
+  tx2_sig_a = private_key_a.sign(sighash) + (b'\x01') # Append signature hash type
+  tx2_sig_b = x(confirmation['tx2_sig'])
+  if not public_key_b.verify(sighash, tx2_sig_b):
+    raise TradeError("Signature from peer for TX2 is invalid.")
 
-
-  # Apply signatures to TX2 and check it is a valid TX
-  b_tx2_sig = x(confirmation['tx2_sig'])
-  # TODO: verify the signature here
-  tx2 = sign_tx2(proxy, tx2, a_private_key, a_public_key, b_public_key, secret_hash, b_tx2_sig)
-  print ""
-  print tx2
-  bitcoin.core.scripteval.VerifyScript(tx2.vin[0].scriptSig, tx1.vout[0].scriptPubKey, tx2, 0, (SCRIPT_VERIFY_P2SH,))
+  tx2.vin[0].scriptSig = CScript([OP_0, tx2_sig_b, tx2_sig_a, 2, public_key_b, public_key_a, 2])
+  bitcoin.core.scripteval.VerifyScript(tx2.vin[0].scriptSig, txin_scriptPubKey, tx2, 0, (SCRIPT_VERIFY_P2SH,))
 
   # Verify the TX4 returned by the peer, then sign it
   assert_tx2_valid(tx4)
-  sign_tx2(proxy, tx4, own_address, peer_address, secret_hash)
+  tx4_sig = get_tx2_tx4_signature(proxy, tx4, private_key_a, public_key_a, public_key_b, secret_hash)
 
-  # proxy.sendrawtransaction(tx1)
+  proxy.sendrawtransaction(tx1)
 
   # Pass back the signature
   return {
     'trade_id': trade_id,
-    'tx4': b2x(tx4.serialize())
+    'tx4_sig': b2x(tx4_sig)
   }
 
 try:

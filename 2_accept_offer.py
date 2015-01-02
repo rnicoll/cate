@@ -85,7 +85,7 @@ def process_offer(offer, audit_directory):
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
   offer_currency_quantity = offer['offer_currency_quantity']
   ask_currency_quantity = offer['ask_currency_quantity']
-  b_public_key = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
+  public_key_b = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
 
   # TODO: Include details of who offered the trade
   print "Received offer " + trade_id + " of " \
@@ -118,15 +118,15 @@ def process_offer(offer, audit_directory):
   cec_key.set_compressed(True)
   with open(audit_directory + os.path.sep + '2_secret.txt', "w", 0700) as secret_file:
     secret_file.write(b2x(cec_key.get_secretbytes()))
-  a_public_key = cec_key.get_pubkey()
-  a_private_key = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(cec_key.get_secretbytes(), True)
+  public_key_a = cec_key.get_pubkey()
+  private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(cec_key.get_secretbytes(), True)
 
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
   lock_time = calendar.timegm(lock_datetime.timetuple())
   own_address = proxy.getnewaddress("CATE refund " + trade_id)
-  tx1 = build_tx1(proxy, ask_currency_quantity, a_public_key, b_public_key, secret_hash, fee_rate)
-  tx2 = build_unsigned_tx2(proxy, tx1, own_address, lock_time, fee_rate)
+  tx1 = build_tx1_tx3(proxy, ask_currency_quantity, public_key_a, public_key_b, secret_hash, fee_rate)
+  tx2 = build_unsigned_tx2_tx4(proxy, tx1, own_address, lock_time, fee_rate)
 
   #     Write TX1 to the audit directory as it's not sent to the peer
   with open(audit_directory + os.path.sep + '2_tx1.txt', "w") as tx1_file:
@@ -136,7 +136,7 @@ def process_offer(offer, audit_directory):
   return {
     'trade_id': trade_id,
     'secret_hash': b2x(Hash(secret)),
-    'a_public_key': b2x(a_public_key),
+    'a_public_key': b2x(public_key_a),
     'tx2': b2x(tx2.serialize())
   }
 
@@ -193,4 +193,4 @@ for message in r.get_messages():
   with open(audit_directory + os.path.sep + '2_acceptance.json', "w", 0700) as response_file:
     response_file.write(io.getvalue())
 
-  # r.send_message(message.author, 'CATE transaction accepted (2)', io.getvalue())
+  r.send_message(message.author, 'CATE transaction accepted (2)', io.getvalue())
