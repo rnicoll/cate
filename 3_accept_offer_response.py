@@ -28,26 +28,18 @@ def assert_acceptance_valid(acceptance):
     raise MessageError( "Missing hash of secret value from accepted offer.")
   if 'tx2' not in acceptance:
     raise MessageError( "Missing TX2 refund transaction from accepted offer.")
-  if 'offer_address' not in acceptance:
-    raise MessageError( "Missing remote address from accepted offer.")
+  if 'a_public_key' not in acceptance:
+    raise MessageError( "Missing peer public key from accepted offer.")
   if len(acceptance['secret_hash']) != 64:
     raise MessageError( "Hash of secret is the wrong length.")
 
-def process_offer_accepted(redditor, acceptance):
+def process_offer_accepted(acceptance, audit_directory):
   trade_id = acceptance['trade_id']
   secret_hash = x(acceptance['secret_hash'])
   tx2 = CMutableTransaction.deserialize(x(acceptance['tx2']))
 
-  audit_directory = ensure_audit_directory_exists(trade_id)
-
-  # Record the received response
-  with open(audit_directory + os.path.sep + 'offer_acceptance_received.json', "w", 0700) as response_file:
-    io = StringIO()
-    json.dump(acceptance, io, indent=4, separators=(',', ': '))
-    response_file.write(io.getvalue())
-
   # Load the offer sent
-  with open(audit_directory + os.path.sep + 'offer.json', "r") as offer_file:
+  with open(audit_directory + os.path.sep + '1_offer.json', "r") as offer_file:
     offer = json.loads(offer_file.read())
 
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
@@ -61,43 +53,31 @@ def process_offer_accepted(redditor, acceptance):
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
   fee_rate = CFeeRate(config['daemons'][offer_currency_code]['fee_per_kb'])
 
-  ask_address = bitcoin.wallet.CBitcoinAddress(offer['ask_address'])
-  offer_address = bitcoin.base58.CBase58Data(acceptance['offer_address'])
-  own_address = ask_address
-  peer_address = offer_address
+  a_public_key = bitcoin.core.key.CPubKey(x(acceptance['a_public_key']))
+  with open(audit_directory + os.path.sep + '1_secret.txt', "r") as secret_file:
+    b_private_key = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
+  b_public_key = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
 
   assert_tx2_valid(tx2)
-  sign_tx2(proxy, tx2, own_address, peer_address, secret_hash)
+  tx2_sig = get_tx2_signature(proxy, tx2, b_private_key, a_public_key, b_public_key, secret_hash)
 
   # Generate TX3 & TX4, which are essentially the same as TX1 & TX2 except
   # that ask/offer details are reversed
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
   lock_time = calendar.timegm(lock_datetime.timetuple())
-  tx3 = build_tx3(proxy, offer_currency_quantity, own_address, peer_address, secret_hash, fee_rate)
-  tx4 = build_tx4(proxy, tx3, lock_time, own_address, fee_rate)
+  own_address = proxy.getnewaddress("CATE refund " + trade_id)
+  tx3 = build_tx3(proxy, offer_currency_quantity, a_public_key, b_public_key, secret_hash, fee_rate)
+  tx4 = build_unsigned_tx2(proxy, tx3, own_address, lock_time, fee_rate)
 
-  #     Write TX2-4 to audit directory
-  with open(audit_directory + os.path.sep + 'tx2.txt', "w") as tx2_file:
-    tx2_file.write(b2x(tx2.serialize()))
-  with open(audit_directory + os.path.sep + 'tx3.txt', "w") as tx3_file:
+  #     Write TX3 to audit directory as we don't send it yet
+  with open(audit_directory + os.path.sep + '3_tx3.txt', "w") as tx3_file:
     tx3_file.write(b2x(tx3.serialize()))
-  with open(audit_directory + os.path.sep + 'tx4_partial.txt', "w") as tx4_file:
-    tx4_file.write(b2x(tx4.serialize()))
 
-  response = {
+  return {
     'trade_id': trade_id,
-    'tx2': b2x(tx2.serialize()),
+    'tx2_sig': b2x(tx2_sig),
     'tx4': b2x(tx4.serialize())
   }
-  io = StringIO()
-  json.dump(response, io)
-
-  # Record the message
-  with open(audit_directory + os.path.sep + 'offer_confirmation.json', "w", 0700) as response_file:
-    response_file.write(io.getvalue())
-
-  r.send_message(redditor, 'CATE transaction confirmed (3)', io.getvalue())
-  return True
 
 try:
   config = load_configuration("config.yml")
@@ -112,9 +92,38 @@ except ConfigurationError as e:
   print e
   sys.exit(0)
 
-for message in r.get_messages():
-  if message.subject == "CATE transaction accepted":
-    acceptance = json.loads(message.body)
-    assert_acceptance_valid(acceptance)
-    if not process_offer_accepted(message.author, acceptance):
-      break
+#for message in r.get_messages():
+#  if message.subject != "CATE transaction accepted (2)":
+#    continue
+
+messages = ['{"trade_id": "a7d23d77-1a60-48bc-bd16-bebf4bd48504", "a_public_key": "0208dcb9734de5ef3db32aeaad35fdf2b1be8eab9abe97a0e6b6a08b5429d9fcf2", "secret_hash": "7843d111e6d9b52411b0a257dfaddfce6a693a96f828e640ad67170fdc06aff1", "tx2": "0100000001e53ed9b10e69399119593f857b04e27b301a1442747d08d3fb3dd65f4e79768500000000000100000001ff9f724e180900001976a914705021ef54363e4703a41f86ff66712638f326f588ac084ea954"}']
+for message in messages:
+  # acceptance = json.loads(message.body)
+  acceptance = json.loads(message)
+  assert_acceptance_valid(acceptance)
+  trade_id = acceptance['trade_id']
+  audit_directory = ensure_audit_directory_exists(trade_id)
+
+  audit_filename = audit_directory + os.path.sep + '3_acceptance.json'
+  if os.path.isfile(audit_filename):
+    print "Offer acceptance " + trade_id + " already received, ignoring offer"
+    continue
+
+  # Record the received response
+  with open(audit_directory + os.path.sep + '3_acceptance.json', "w", 0700) as response_file:
+    io = StringIO()
+    json.dump(acceptance, io, indent=4, separators=(',', ': '))
+    response_file.write(io.getvalue())
+
+  response = process_offer_accepted(acceptance, audit_directory)
+  if not response:
+    break
+
+  io = StringIO()
+  json.dump(response, io)
+
+  # Record the message
+  with open(audit_directory + os.path.sep + '3_confirmation.json', "w", 0700) as response_file:
+    response_file.write(io.getvalue())
+
+  # r.send_message(redditor, 'CATE transaction confirmed (3)', io.getvalue())

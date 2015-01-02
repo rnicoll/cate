@@ -25,12 +25,14 @@ def assert_offer_valid(offer):
   if 'trade_id' not in offer:
     raise MessageError( "Missing trade ID from received offer.")
   if offer['trade_id'].find(os.path.sep) != -1:
-    raise MessageError("Invalid trade ID received; trade must not contain path separators")
+    raise MessageError( "Invalid trade ID received; trade must not contain path separators")
 
   if 'ask_currency_hash' not in offer \
-    or 'ask_currency_quantity' not in offer \
-    or 'ask_address' not in offer:
+    or 'ask_currency_quantity' not in offer:
     raise MessageError( "Missing details of currency being asked for from received offer.")
+
+  if 'b_public_key' not in offer:
+    raise MessageError( "Missing peer's public key from received offer." )
 
   if 'offer_currency_hash' not in offer \
     or 'offer_currency_quantity' not in offer:
@@ -65,15 +67,14 @@ def assert_offer_valid(offer):
   if ask_currency_quantity < 1:
     raise MessageError( "Asked currency quantity is below minimum trade value.")
 
-  if not validate_address(offer['ask_address']):
-    raise MessageError( "Address to send coins to is invalid.")
+  # TODO: Try to validate the public key as much as possible
 
   if not re.search('^[\w\d][\w\d-]+[\w\d]$', offer['trade_id']):
     raise MessageError( "Trade ID is invalid, expected a UUID.")
 
   return
 
-def process_offer(other_redditor, offer):
+def process_offer(offer, audit_directory):
   """
   Parses and validates an offer from step 1, and if the user agrees to the offer,
   generates the "send" and "refund" transactions.
@@ -84,23 +85,7 @@ def process_offer(other_redditor, offer):
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
   offer_currency_quantity = offer['offer_currency_quantity']
   ask_currency_quantity = offer['ask_currency_quantity']
-  ask_address = bitcoin.base58.CBase58Data(offer['ask_address'])
-
-  # We validate the trade ID already, but double check here
-  if trade_id.find(os.path.sep) != -1:
-    raise Exception("Invalid trade ID received; trade must not contain path separators")
-
-  # Log the incoming offer
-  audit_directory = ensure_audit_directory_exists(trade_id)
-  audit_filename = audit_directory + os.path.sep + 'received_offer.json'
-  if os.path.isfile(audit_filename):
-    print "Offer " + trade_id + " already received, ignoring offer"
-    return False
-  else:
-    with open(audit_filename, "w") as audit_file:
-      io = StringIO()
-      json.dump(offer, io, indent=4, separators=(',', ': '))
-      audit_file.write(io.getvalue())
+  b_public_key = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
 
   # TODO: Include details of who offered the trade
   print "Received offer " + trade_id + " of " \
@@ -122,67 +107,90 @@ def process_offer(other_redditor, offer):
   #	Generate a very large secret number (i.e. around 128 bits)
   secret = os.urandom(16)
   secret_hash = Hash(secret)
-  with open(audit_directory + os.path.sep + 'secret.txt', "w", 0700) as secret_file:
+  #     Write secret to the audit directory as it's not sent to the peer
+  with open(audit_directory + os.path.sep + '2_secret.txt', "w", 0700) as secret_file:
     secret_file.write(secret)
 
-  try:
-    offer_address = proxy.getnewaddress("CATE " + other_redditor.name + " (" + trade_id + ")")
-  except socket.error:
-    print ("Could not connect to the wallet software; did you remember to use the \"-server\" option if running the QT client?")
-    sys.exit(1)
+  # Generate a key pair to be used to sign transactions. We generate the key
+  # directly rather than via a wallet as it's used on both chains.
+  cec_key = bitcoin.core.key.CECKey()
+  cec_key.generate()
+  cec_key.set_compressed(True)
+  with open(audit_directory + os.path.sep + '2_secret.txt', "w", 0700) as secret_file:
+    secret_file.write(b2x(cec_key.get_secretbytes()))
+  a_public_key = cec_key.get_pubkey()
+  a_private_key = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(cec_key.get_secretbytes(), True)
 
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
   lock_time = calendar.timegm(lock_datetime.timetuple())
-  tx1 = build_tx1(proxy, ask_currency_quantity, offer_address, ask_address, secret_hash, fee_rate)
-  tx2 = build_tx2(proxy, tx1, lock_time, offer_address, fee_rate)
+  own_address = proxy.getnewaddress("CATE refund " + trade_id)
+  tx1 = build_tx1(proxy, ask_currency_quantity, a_public_key, b_public_key, secret_hash, fee_rate)
+  tx2 = build_unsigned_tx2(proxy, tx1, own_address, lock_time, fee_rate)
 
-  #     Write TX1 and TX2 to audit directory
-  with open(audit_directory + os.path.sep + 'tx1.txt', "w") as tx1_file:
+  #     Write TX1 to the audit directory as it's not sent to the peer
+  with open(audit_directory + os.path.sep + '2_tx1.txt', "w") as tx1_file:
     tx1_file.write(b2x(tx1.serialize()))
-  with open(audit_directory + os.path.sep + 'tx2_partial.txt', "w") as tx2_file:
-    tx2_file.write(b2x(tx2.serialize()))
 
   #	Send TX2 to remote user along with our address
-  response = {
+  return {
     'trade_id': trade_id,
-    'offer_address': offer_address.__str__(),
     'secret_hash': b2x(Hash(secret)),
+    'a_public_key': b2x(a_public_key),
     'tx2': b2x(tx2.serialize())
   }
-  io = StringIO()
-  json.dump(response, io)
-
-  # Record the offer
-  with open(audit_directory + os.path.sep + 'offer_acceptance.json', "w", 0700) as response_file:
-    response_file.write(io.getvalue())
-
-  r.send_message(other_redditor, 'CATE transaction accepted', io.getvalue())
-
-  #	Await signed TX2 and TX4 returned from remote user (another script to handle this)
-
-  return True
 
 try:
   config = load_configuration("config.yml")
 except ConfigurationError as e:
   print e
-  sys.exit(0)
+  sys.exit(1)
 
 r = praw.Reddit(user_agent = "CATE - Cross-chain Atomic Trading Engine")
 try:
   reddit_login(r, config)
 except ConfigurationError as e:
   print e
-  sys.exit(0)
+  sys.exit(1)
 
 if not os.path.isdir('audits'):
   os.mkdir('audits')
 
 for message in r.get_messages():
-  if message.subject == "CATE transaction offer":
-    offer = json.loads(message.body)
-    assert_offer_valid(offer)
+  if message.subject != "CATE transaction offer (1)":
+    continue
 
-    if not process_offer(message.author, offer):
-      break
+  offer = json.loads(message.body)
+  assert_offer_valid(offer)
+  trade_id = offer['trade_id']
+  audit_directory = ensure_audit_directory_exists(trade_id)
+
+  # Log the incoming offer
+  audit_directory = ensure_audit_directory_exists(trade_id)
+  audit_filename = audit_directory + os.path.sep + '2_offer.json'
+  if os.path.isfile(audit_filename):
+    print "Offer " + trade_id + " already received, ignoring offer"
+    continue
+
+  with open(audit_filename, "w") as audit_file:
+    io = StringIO()
+    json.dump(offer, io, indent=4, separators=(',', ': '))
+    audit_file.write(io.getvalue())
+
+  try:
+    response = process_offer(offer, audit_directory)
+  except socket.error as err:
+    print "Could not connect to wallet."
+    sys.exit(1)
+
+  if not response:
+    break
+
+  io = StringIO()
+  json.dump(response, io)
+
+  # Record the message
+  with open(audit_directory + os.path.sep + '2_acceptance.json', "w", 0700) as response_file:
+    response_file.write(io.getvalue())
+
+  # r.send_message(message.author, 'CATE transaction accepted (2)', io.getvalue())

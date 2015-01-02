@@ -12,6 +12,37 @@ import bitcoin.rpc
 from cate import *
 from cate.error import ConfigurationError
 
+def input_trade(trade_id, pubkey):
+  offer_currency_code = ''
+  offer_currency_quantity = 0
+  ask_currency_code = ''
+  ask_currency_quantity = 0
+
+  while offer_currency_code not in NETWORK_HASHES:
+    offer_currency_code = input_currency_code("What currency are you offering, and how much?")
+    # TODO: Show a useful error on invalid code
+
+  while offer_currency_quantity < Decimal(0.00000001):
+    offer_currency_quantity = Decimal(raw_input("Quantity offered: "))
+
+  while ask_currency_code not in NETWORK_HASHES:
+    ask_currency_code = input_currency_code("What currency are you wanting, and how much?")
+    # TODO: Show a useful error on invalid code
+      
+  while ask_currency_quantity < Decimal(0.00000001):
+    ask_currency_quantity = Decimal(raw_input("Quantity asked: "))
+
+  # TODO: Repeat the trade back to the user for them to validate
+
+  return {
+    'trade_id': trade_id,
+    'offer_currency_hash': NETWORK_HASHES[offer_currency_code],
+    'offer_currency_quantity': int(offer_currency_quantity * COIN),
+    'b_public_key': b2x(pubkey),
+    'ask_currency_hash': NETWORK_HASHES[ask_currency_code],
+    'ask_currency_quantity': int(ask_currency_quantity * COIN)
+  }
+
 def input_currency_code(prompt):
   """
   Prompts the user for a currency code (BTC, LTC, DOGE, etc.) and repeats the prompt until
@@ -47,11 +78,6 @@ audit_directory = ensure_audit_directory_exists(trade_id)
 
 # Query the user for details of the transaction
 target_redditor = None
-offer_currency_code = ''
-offer_currency_quantity = 0
-ask_currency_code = ''
-ask_currency_quantity = 0
-receive_address = None
 
 print "Okay, first of all I need to know who to make an offer to."
 while target_redditor == None:
@@ -62,46 +88,25 @@ while target_redditor == None:
     print ("Could not find that redditor")
     target_redditor = None
 
-offer_currency_code = input_currency_code("What currency are you offering, and how much?")
+# Generate a key pair to be used to sign transactions. We generate the key
+# directly rather than via a wallet as it's used on both chains.
+cec_key = bitcoin.core.key.CECKey()
+cec_key.generate()
+cec_key.set_compressed(True)
+with open(audit_directory + os.path.sep + '1_secret.txt', "w", 0700) as secret_file:
+  secret_file.write(b2x(cec_key.get_secretbytes()))
 
-while offer_currency_quantity < Decimal(0.00000001):
-  offer_currency_quantity = Decimal(raw_input("Quantity offered: "))
-
-ask_currency_code = input_currency_code("What currency are you wanting, and how much?")
-    
-while ask_currency_quantity < Decimal(0.00000001):
-  ask_currency_quantity = Decimal(raw_input("Quantity asked: "))
-
-# Generate a private key and matching address
-bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
-proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
-try:
-  ask_address = proxy.getnewaddress("CATE " + target_username + " (" + trade_id + ")")
-except socket.error:
-  print ("Could not connect to the wallet software; did you remember to use the \"-server\" option if running the QT client?")
-  sys.exit(1)
-
-# TODO: Repeat the trade back to the user for them to validate
-
-trade = {
-  'trade_id': trade_id,
-  'offer_currency_hash': NETWORK_HASHES[offer_currency_code],
-  'offer_currency_quantity': int(offer_currency_quantity * COIN),
-  'ask_address': ask_address.__str__(),
-  'ask_currency_hash': NETWORK_HASHES[ask_currency_code],
-  'ask_currency_quantity': int(ask_currency_quantity * COIN)
-}
-
+trade = input_trade(trade_id, cec_key.get_pubkey())
 io = StringIO()
 json.dump(trade, io)
 
 # Record the offer
-with open(audit_directory + os.path.sep + 'offer.json', "w", 0700) as offer_file:
+with open(audit_directory + os.path.sep + '1_offer.json', "w", 0700) as offer_file:
   offer_file.write(io.getvalue())
 
 trade_json = io.getvalue()
 
-r.send_message(target_redditor, 'CATE transaction offer', trade_json)
+r.send_message(target_redditor, 'CATE transaction offer (1)', trade_json)
 
 print "Offer sent"
 

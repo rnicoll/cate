@@ -76,31 +76,3 @@ def reddit_login(r, config):
     raise error.ConfigurationError("Could not log in to reddit with provided username and password")
 
   return
-
-def validate_address(address):
-  """
-  Validates a Bitcoin-format pay-to-key address. Takes in the address as a
-  string and returns True if the address is valid, False otherwise.
-  """
-  if len(address) < ADDRESS_LENGTH:
-    return False
-  else:
-    addr = decode(address)
-    if not addr:
-      return False
-    else:
-      version = addr[0]
-      checksum = addr[-4:] # Get the last 4 characters of the address
-      vh160 = addr[:-4] # Version plus hash160 is what is checksummed
-
-      digester = hashlib.sha256()
-      digester.update(vh160)
-      vh160_hash = digester.digest()
-
-      digester = hashlib.sha256()
-      digester.update(vh160_hash)
-      vh160_hash_hash = digester.digest()
-
-      if vh160_hash_hash[0:4] != checksum:
-        return False
-  return True
