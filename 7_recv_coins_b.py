@@ -13,14 +13,14 @@ from bitcoin.core import *
 from bitcoin.core.script import *
 import bitcoin.rpc
 from cate import *
+from cate.error import ConfigurationError
 
 # This is the final step under normal circumstances, in which 'B' extracts
 # the secret from the transaction 'A' sent to spend the coins provided.
 
-# TODO: Should use a more specific exception
 try:
   config = load_configuration("config.yml")
-except Exception as e:
+except ConfigurationError as e:
   print e
   sys.exit(0)
 

@@ -10,6 +10,7 @@ import bitcoin
 from bitcoin.wallet import CBitcoinSecret, P2PKHBitcoinAddress
 import bitcoin.rpc
 from cate import *
+from cate.error import ConfigurationError
 
 def input_currency_code(prompt):
   """
@@ -27,7 +28,6 @@ def input_currency_code(prompt):
 
   return currency_code
 
-# TODO: Should use a more specific exception
 try:
   config = load_configuration("config.yml")
 except Exception as e:
@@ -35,10 +35,9 @@ except Exception as e:
   sys.exit(1)
 
 r = praw.Reddit(user_agent = "CATE - Cross-chain Atomic Trading Engine")
-# TODO: Should use a more specific exception
 try:
   reddit_login(r, config)
-except Exception as e:
+except ConfigurationError as e:
   print e
   sys.exit(1)
 
@@ -97,8 +96,8 @@ io = StringIO()
 json.dump(trade, io)
 
 # Record the offer
-with open(audit_directory + os.path.sep + 'offer.json', "w", 0700) as secret_file:
-  secret_file.write(io.getvalue())
+with open(audit_directory + os.path.sep + 'offer.json', "w", 0700) as offer_file:
+  offer_file.write(io.getvalue())
 
 trade_json = io.getvalue()
 

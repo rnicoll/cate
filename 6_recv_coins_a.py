@@ -13,14 +13,14 @@ from bitcoin.core import *
 from bitcoin.core.script import *
 import bitcoin.rpc
 from cate import *
+from cate.error import ConfigurationError
 
 # This is where both coins have been sent to the blockchains and 'A'
 # can now use the secret to spend the coins sent by 'B'
 
-# TODO: Should use a more specific exception
 try:
   config = load_configuration("config.yml")
-except Exception as e:
+except ConfigurationError as e:
   print e
   sys.exit(0)
 

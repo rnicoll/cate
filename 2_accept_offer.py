@@ -13,6 +13,7 @@ import re
 from bitcoin import SelectParams
 import bitcoin.rpc
 from cate import *
+from cate.fees import CFeeRate
 from cate.tx import *
 from cate.fees import CFeeRate
 
@@ -22,46 +23,53 @@ def assert_offer_valid(offer):
   """
 
   if 'trade_id' not in offer:
-    raise Exception( "Missing trade ID from received offer.")
+    raise MessageError( "Missing trade ID from received offer.")
+  if offer['trade_id'].find(os.path.sep) != -1:
+    raise MessageError("Invalid trade ID received; trade must not contain path separators")
 
   if 'ask_currency_hash' not in offer \
     or 'ask_currency_quantity' not in offer \
     or 'ask_address' not in offer:
-    raise Exception( "Missing details of currency being asked for from received offer.")
+    raise MessageError( "Missing details of currency being asked for from received offer.")
 
   if 'offer_currency_hash' not in offer \
     or 'offer_currency_quantity' not in offer:
-    raise Exception( "Missing details of offered currency from received offer.")
+    raise MessageError( "Missing details of offered currency from received offer.")
 
   if offer['offer_currency_hash'] not in NETWORK_CODES:
-    raise Exception( "Offered currency genesis hash " + offer['offer_currency_hash'] + " is unknown.")
+    raise MessageError( "Offered currency genesis hash " + offer['offer_currency_hash'] + " is unknown.")
 
   if offer['ask_currency_hash'] not in NETWORK_CODES:
-    raise Exception( "Asked currency genesis hash " + offer['ask_currency_hash'] + " is unknown.")
+    raise MessageError( "Asked currency genesis hash " + offer['ask_currency_hash'] + " is unknown.")
 
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
 
   if not isinstance( offer['offer_currency_quantity'], ( int, long ) ):
-    raise Exception( "Offered currency quantity is not a number.")
+    raise MessageError( "Offered currency quantity is not a number.")
 
   if not isinstance( offer['ask_currency_quantity'], ( int, long ) ):
-    raise Exception( "Asked currency quantity is not a number.")
+    raise MessageError( "Asked currency quantity is not a number.")
+
+  if offer_currency_code not in config['daemons']:
+    raise MessageError( "Offered currency " + offer_currency_code + " is not configured.")
+  if ask_currency_code not in config['daemons']:
+    raise MessageError( "Asked currency " + ask_currency_code + " is not configured.")
 
   offer_currency_quantity = offer['offer_currency_quantity']
   ask_currency_quantity = offer['ask_currency_quantity']
 
   if offer_currency_quantity < 1:
-    raise Exception( "Offered currency quantity is below minimum trade value.")
+    raise MessageError( "Offered currency quantity is below minimum trade value.")
 
   if ask_currency_quantity < 1:
-    raise Exception( "Asked currency quantity is below minimum trade value.")
+    raise MessageError( "Asked currency quantity is below minimum trade value.")
 
   if not validate_address(offer['ask_address']):
-    raise Exception( "Address to send coins to is invalid.")
+    raise MessageError( "Address to send coins to is invalid.")
 
   if not re.search('^[\w\d][\w\d-]+[\w\d]$', offer['trade_id']):
-    raise Exception( "Trade ID is invalid, expected a UUID.")
+    raise MessageError( "Trade ID is invalid, expected a UUID.")
 
   return
 
@@ -113,6 +121,7 @@ def process_offer(other_redditor, offer):
   
   #	Generate a very large secret number (i.e. around 128 bits)
   secret = os.urandom(16)
+  secret_hash = Hash(secret)
   with open(audit_directory + os.path.sep + 'secret.txt', "w", 0700) as secret_file:
     secret_file.write(secret)
 
@@ -125,7 +134,7 @@ def process_offer(other_redditor, offer):
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
   lock_time = calendar.timegm(lock_datetime.timetuple())
-  tx1 = build_tx1(proxy, ask_currency_quantity, offer_address, ask_address, secret, fee_rate)
+  tx1 = build_tx1(proxy, ask_currency_quantity, offer_address, ask_address, secret_hash, fee_rate)
   tx2 = build_tx2(proxy, tx1, lock_time, offer_address, fee_rate)
 
   #     Write TX1 and TX2 to audit directory
@@ -154,18 +163,16 @@ def process_offer(other_redditor, offer):
 
   return True
 
-# TODO: Should use a more specific exception
 try:
   config = load_configuration("config.yml")
-except Exception as e:
+except ConfigurationError as e:
   print e
   sys.exit(0)
 
 r = praw.Reddit(user_agent = "CATE - Cross-chain Atomic Trading Engine")
-# TODO: Should use a more specific exception
 try:
   reddit_login(r, config)
-except Exception as e:
+except ConfigurationError as e:
   print e
   sys.exit(0)
 

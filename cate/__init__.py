@@ -43,7 +43,7 @@ def ensure_audit_directory_exists(trade_id):
 
 def load_configuration(filename):
   if not os.path.isfile(filename):
-    raise Exception("Expected configuration file '" + filename + "'")
+    raise error.ConfigurationError("Expected configuration file '" + filename + "'")
 
   with open(filename, 'r') as f:
     raw_config = f.read(10 * 1024 * 1024) # If you have a config over 10M in size, I give up
@@ -51,7 +51,7 @@ def load_configuration(filename):
   try:
     config = yaml.load(raw_config)
   except yaml.parser.ParserError as e:
-    raise Exception("Could not parse configuration file: {0}".format(e))
+    raise error.ConfigurationError("Could not parse configuration file: {0}".format(e))
 
   return config
 
@@ -63,17 +63,17 @@ def reddit_login(r, config):
 
   # Check the configuration has a reddit section before trying to log in
   if 'reddit' not in config:
-    raise Exception("Expected 'reddit' section in configuration file 'config.yml'")
+    raise error.ConfigurationError("Expected 'reddit' section in configuration file 'config.yml'")
 
   # Try to log in
   reddit_config = config['reddit']
   if 'username' not in reddit_config or 'password' not in reddit_config:
-    raise Exception("Expected reddit username and password to be provided in password file")
+    raise error.ConfigurationError("Expected reddit username and password to be provided in password file")
 
   try:
     r.login(reddit_config['username'].strip(), reddit_config['password'].strip())
   except praw.errors.InvalidUserPass:
-    raise Exception("Could not log in to reddit with provided username and password")
+    raise error.ConfigurationError("Could not log in to reddit with provided username and password")
 
   return
 
