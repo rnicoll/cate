@@ -220,6 +220,6 @@ def sign_tx2(proxy, tx2, own_private_key, own_public_key, peer_public_key, secre
   # Ensure TX2 is a mutable transaction
   tx2 = CMutableTransaction.from_tx(tx2)
 
-  tx2.vin[0].scriptSig = CScript([0, own_sig, peer_sig, own_public_key, peer_public_key, 2])
+  tx2.vin[0].scriptSig = CScript([0, peer_sig, own_sig, 2, peer_public_key, own_public_key, 2])
 
   return tx2

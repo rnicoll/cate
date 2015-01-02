@@ -92,14 +92,11 @@ except ConfigurationError as e:
   print e
   sys.exit(0)
 
-#for message in r.get_messages():
-#  if message.subject != "CATE transaction accepted (2)":
-#    continue
+for message in r.get_messages():
+  if message.subject != "CATE transaction accepted (2)":
+    continue
 
-messages = ['{"trade_id": "a7d23d77-1a60-48bc-bd16-bebf4bd48504", "a_public_key": "0208dcb9734de5ef3db32aeaad35fdf2b1be8eab9abe97a0e6b6a08b5429d9fcf2", "secret_hash": "7843d111e6d9b52411b0a257dfaddfce6a693a96f828e640ad67170fdc06aff1", "tx2": "0100000001e53ed9b10e69399119593f857b04e27b301a1442747d08d3fb3dd65f4e79768500000000000100000001ff9f724e180900001976a914705021ef54363e4703a41f86ff66712638f326f588ac084ea954"}']
-for message in messages:
-  # acceptance = json.loads(message.body)
-  acceptance = json.loads(message)
+  acceptance = json.loads(message.body)
   assert_acceptance_valid(acceptance)
   trade_id = acceptance['trade_id']
   audit_directory = ensure_audit_directory_exists(trade_id)
