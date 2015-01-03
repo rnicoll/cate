@@ -38,7 +38,7 @@ def input_trade(trade_id, pubkey):
     'trade_id': trade_id,
     'offer_currency_hash': NETWORK_HASHES[offer_currency_code],
     'offer_currency_quantity': int(offer_currency_quantity * COIN),
-    'b_public_key': b2x(pubkey),
+    'public_key_b': b2x(pubkey),
     'ask_currency_hash': NETWORK_HASHES[ask_currency_code],
     'ask_currency_quantity': int(ask_currency_quantity * COIN)
   }
@@ -93,8 +93,8 @@ while target_redditor == None:
 cec_key = bitcoin.core.key.CECKey()
 cec_key.generate()
 cec_key.set_compressed(True)
-with open(audit_directory + os.path.sep + '1_secret.txt', "w", 0700) as secret_file:
-  secret_file.write(b2x(cec_key.get_secretbytes()))
+with open(audit_directory + os.path.sep + '1_private_key.txt', "w", 0700) as private_key_file:
+  private_key_file.write(b2x(cec_key.get_secretbytes()))
 
 trade = input_trade(trade_id, cec_key.get_pubkey())
 io = StringIO()

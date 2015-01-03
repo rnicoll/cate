@@ -45,10 +45,10 @@ def process_offer_confirmed(confirmation, audit_directory):
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
   ask_currency_quantity = offer['ask_currency_quantity']
   offer_currency_quantity = offer['offer_currency_quantity']
-  with open(audit_directory + os.path.sep + '2_secret.txt', "r") as secret_file:
-    private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
+  with open(audit_directory + os.path.sep + '2_private_key.txt', "r") as private_key_file:
+    private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(private_key_file.read()), True)
   public_key_a = bitcoin.core.key.CPubKey(private_key_a._cec_key.get_pubkey())
-  public_key_b = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
+  public_key_b = bitcoin.core.key.CPubKey(x(offer['public_key_b']))
   secret_hash = x(acceptance['secret_hash'])
 
   # Connect to the daemon
@@ -71,6 +71,8 @@ def process_offer_confirmed(confirmation, audit_directory):
 
   tx2.vin[0].scriptSig = CScript([OP_0, tx2_sig_b, tx2_sig_a, 2, public_key_b, public_key_a, 2])
   bitcoin.core.scripteval.VerifyScript(tx2.vin[0].scriptSig, txin_scriptPubKey, tx2, 0, (SCRIPT_VERIFY_P2SH,))
+  with open(audit_directory + os.path.sep + '4_tx2.txt', "w") as tx2_file:
+    tx2_file.write(b2x(tx2.serialize()))
 
   # Verify the TX4 returned by the peer, then sign it
   assert_tx2_valid(tx4)
@@ -127,4 +129,4 @@ for message in r.get_messages():
   with open(audit_directory + os.path.sep + '4_coins_sent.json', "w", 0700) as response_file:
     response_file.write(io.getvalue())
 
-  # r.send_message(other_redditor, 'CATE transaction sent (4)', io.getvalue())
+  r.send_message(message.author, 'CATE transaction sent (4)', io.getvalue())

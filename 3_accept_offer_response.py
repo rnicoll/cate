@@ -28,7 +28,7 @@ def assert_acceptance_valid(acceptance):
     raise MessageError( "Missing hash of secret value from accepted offer.")
   if 'tx2' not in acceptance:
     raise MessageError( "Missing TX2 refund transaction from accepted offer.")
-  if 'a_public_key' not in acceptance:
+  if 'public_key_a' not in acceptance:
     raise MessageError( "Missing peer public key from accepted offer.")
   if len(acceptance['secret_hash']) != 64:
     raise MessageError( "Hash of secret is the wrong length.")
@@ -36,7 +36,7 @@ def assert_acceptance_valid(acceptance):
 def process_offer_accepted(acceptance, audit_directory):
   trade_id = acceptance['trade_id']
   secret_hash = x(acceptance['secret_hash'])
-  tx2 = CMutableTransaction.deserialize(x(acceptance['tx2']))
+  tx2 = CTransaction.deserialize(x(acceptance['tx2']))
 
   # Load the offer sent
   with open(audit_directory + os.path.sep + '1_offer.json', "r") as offer_file:
@@ -53,10 +53,10 @@ def process_offer_accepted(acceptance, audit_directory):
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
   fee_rate = CFeeRate(config['daemons'][offer_currency_code]['fee_per_kb'])
 
-  public_key_a = bitcoin.core.key.CPubKey(x(acceptance['a_public_key']))
-  with open(audit_directory + os.path.sep + '1_secret.txt', "r") as secret_file:
-    private_key_b = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
-  public_key_b = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
+  public_key_a = bitcoin.core.key.CPubKey(x(acceptance['public_key_a']))
+  with open(audit_directory + os.path.sep + '1_private_key.txt', "r") as private_key_file:
+    private_key_b = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(private_key_file.read()), True)
+  public_key_b = bitcoin.core.key.CPubKey(x(offer['public_key_b']))
 
   assert_tx2_valid(tx2)
   tx2_sig = get_tx2_tx4_signature(proxy, tx2, private_key_b, public_key_a, public_key_b, secret_hash)
@@ -122,4 +122,4 @@ for message in r.get_messages():
   with open(audit_directory + os.path.sep + '3_confirmation.json', "w", 0700) as response_file:
     response_file.write(io.getvalue())
 
-  r.send_message(redditor, 'CATE transaction confirmed (3)', io.getvalue())
+  r.send_message(message.author, 'CATE transaction confirmed (3)', io.getvalue())

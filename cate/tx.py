@@ -164,7 +164,7 @@ Generate the spending transaction for TX1/TX3
 
 seckey is the secret key used to sign the transaction
 """
-def build_tx1_tx3_spend(proxy, tx1, secret, own_address):
+def build_tx1_tx3_spend(proxy, tx1, private_key, secret, own_address, fee_rate):
   fee = fee_rate.get_fee(1000)
 
   prev_txid = tx1.GetHash()
@@ -184,11 +184,11 @@ def build_tx1_tx3_spend(proxy, tx1, secret, own_address):
 
   # Now sign it. We have to append the type of signature we want to the end, in
   # this case the usual SIGHASH_ALL.
-  sig = seckey.sign(sighash) + bytes([SIGHASH_ALL])
+  sig = private_key.sign(sighash) + bytes([SIGHASH_ALL])
 
   # scriptSig needs to be:
   #     <shared secret> <signature B> <B public key> 0
-  txin.scriptSig = CScript([secret, sig, seckey.pub, 0])
+  txin.scriptSig = CScript([secret, sig, private_key.pub, 0])
 
   return tx
 

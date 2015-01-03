@@ -31,7 +31,7 @@ def assert_offer_valid(offer):
     or 'ask_currency_quantity' not in offer:
     raise MessageError( "Missing details of currency being asked for from received offer.")
 
-  if 'b_public_key' not in offer:
+  if 'public_key_b' not in offer:
     raise MessageError( "Missing peer's public key from received offer." )
 
   if 'offer_currency_hash' not in offer \
@@ -85,7 +85,7 @@ def process_offer(offer, audit_directory):
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
   offer_currency_quantity = offer['offer_currency_quantity']
   ask_currency_quantity = offer['ask_currency_quantity']
-  public_key_b = bitcoin.core.key.CPubKey(x(offer['b_public_key']))
+  public_key_b = bitcoin.core.key.CPubKey(x(offer['public_key_b']))
 
   # TODO: Include details of who offered the trade
   print "Received offer " + trade_id + " of " \
@@ -116,8 +116,8 @@ def process_offer(offer, audit_directory):
   cec_key = bitcoin.core.key.CECKey()
   cec_key.generate()
   cec_key.set_compressed(True)
-  with open(audit_directory + os.path.sep + '2_secret.txt', "w", 0700) as secret_file:
-    secret_file.write(b2x(cec_key.get_secretbytes()))
+  with open(audit_directory + os.path.sep + '2_private_key.txt', "w", 0700) as private_key_file:
+    private_key_file.write(b2x(cec_key.get_secretbytes()))
   public_key_a = cec_key.get_pubkey()
   private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(cec_key.get_secretbytes(), True)
 
@@ -136,7 +136,7 @@ def process_offer(offer, audit_directory):
   return {
     'trade_id': trade_id,
     'secret_hash': b2x(Hash(secret)),
-    'a_public_key': b2x(public_key_a),
+    'public_key_a': b2x(public_key_a),
     'tx2': b2x(tx2.serialize())
   }
 

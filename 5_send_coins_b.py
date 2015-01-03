@@ -51,7 +51,7 @@ def process_offer_confirmed(send_notification, audit_directory):
   offer_currency_quantity = offer['offer_currency_quantity']
   with open(audit_directory + os.path.sep + '1_secret.txt', "r") as secret_file:
     private_key_b = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
-  public_key_a = bitcoin.core.key.CPubKey(x(acceptance['a_public_key']))
+  public_key_a = bitcoin.core.key.CPubKey(x(acceptance['public_key_a']))
   public_key_b = bitcoin.core.key.CPubKey(private_key_b._cec_key.get_pubkey())
   secret_hash = x(acceptance['secret_hash'])
 
@@ -74,6 +74,8 @@ def process_offer_confirmed(send_notification, audit_directory):
 
   tx4.vin[0].scriptSig = CScript([OP_0, tx4_sig_b, tx4_sig_a, 2, public_key_b, public_key_a, 2])
   bitcoin.core.scripteval.VerifyScript(tx4.vin[0].scriptSig, txin_scriptPubKey, tx4, 0, (SCRIPT_VERIFY_P2SH,))
+  with open(audit_directory + os.path.sep + '5_tx4.txt', "w") as tx4_file:
+    tx4_file.write(b2x(tx4.serialize()))
 
   proxy.sendrawtransaction(tx3)
 
