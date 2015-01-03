@@ -42,6 +42,8 @@ for trade_id in os.listdir('audits'):
     continue
   if not os.path.isfile(directory_path + os.path.sep + '4_coins_sent.json'):
     continue
+  if os.path.isfile(directory_path + os.path.sep + '6_complete.txt'):
+    continue
   tx3_id = get_tx3_id(directory_path)
   ready_transactions[tx3_id] = trade_id
 
@@ -100,5 +102,9 @@ while ready_transactions:
     bitcoin.core.scripteval.VerifyScript(tx_spend.vin[0].scriptSig, tx3.vout[0].scriptPubKey, tx_spend, 0, (SCRIPT_VERIFY_P2SH,))
     proxy.sendrawtransaction(tx_spend)
     ready_transactions.pop(tx3_id, None)
+
+    # Add a file to indicate the TX is complete
+    with open(audit_directory + os.path.sep + '6_complete.txt', "w", 0700) as completion_file:
+      completion_file.write(tx_spend.GetHash())
   if ready_transactions:
     time.sleep(5)
