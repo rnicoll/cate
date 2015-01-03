@@ -76,7 +76,7 @@ def process_offer_confirmed(confirmation, audit_directory):
 
   # Verify the TX4 returned by the peer, then sign it
   assert_tx2_valid(tx4)
-  tx4_sig = get_tx2_tx4_signature(proxy, tx4, private_key_a, public_key_a, public_key_b, secret_hash)
+  tx4_sig = get_tx4_signature(proxy, tx4, private_key_a, public_key_a, public_key_b, secret_hash)
 
   proxy.sendrawtransaction(tx1)
 

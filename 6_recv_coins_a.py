@@ -6,8 +6,9 @@ import sys
 import time
 
 from bitcoin import SelectParams
-from bitcoin.core import *
 import bitcoin.rpc
+from bitcoin.core import *
+import bitcoin.core.scripteval
 from cate import *
 from cate.error import ConfigurationError
 from cate.fees import CFeeRate
@@ -90,17 +91,18 @@ while ready_transactions:
     tx3 = proxy.getrawtransaction(tx3_id)
 
     # FIXME: Verify the secret we have matches the one expected
-    print Hash(secret)
+    print b2x(Hash(secret))
 
     # Get an address to pull the funds into
     own_address = proxy.getnewaddress("CATE " + trade_id)
 
     # Create a new transaction spending TX3, using the secret and our private key
-    spend_tx = build_tx1_tx3_spend(proxy, tx3, private_key_a, secret, own_address, fee_rate)
+    tx_spend = build_tx1_tx3_spend(proxy, tx3, private_key_a, secret, own_address, fee_rate)
 
     # Send the transaction to the blockchain
-    print spend_tx
-    proxy.sendrawtransaction(spend_tx)
+    print tx_spend
+    bitcoin.core.scripteval.VerifyScript(tx_spend.vin[0].scriptSig, tx3.vout[0].scriptPubKey, tx_spend, 0, (SCRIPT_VERIFY_P2SH,))
+    proxy.sendrawtransaction(tx_spend)
     ready_transactions.pop(tx3_id, None)
   if ready_transactions:
     time.sleep(5)

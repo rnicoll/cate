@@ -126,8 +126,8 @@ def process_offer(offer, audit_directory):
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
   lock_time = calendar.timegm(lock_datetime.timetuple())
   own_address = proxy.getnewaddress("CATE refund " + trade_id)
-  tx1 = build_tx1_tx3(proxy, ask_currency_quantity, public_key_a, public_key_b, secret_hash, fee_rate)
-  tx2 = build_unsigned_tx2_tx4(proxy, tx1, own_address, lock_time, fee_rate)
+  tx1 = build_tx1(proxy, ask_currency_quantity, public_key_a, public_key_b, secret_hash, fee_rate)
+  tx2 = build_unsigned_tx2(proxy, tx1, own_address, lock_time, fee_rate)
 
   #     Write TX1 to the audit directory as it's not sent to the peer
   with open(audit_directory + os.path.sep + '2_tx1.txt', "w") as tx1_file:
