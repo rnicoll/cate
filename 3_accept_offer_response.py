@@ -15,7 +15,7 @@ from bitcoin.core import *
 from bitcoin.core.script import *
 import bitcoin.rpc
 from cate import *
-from cate.error import *
+from cate.error import ConfigurationError, MessageError, TradeError
 from cate.fees import CFeeRate
 from cate.tx import *
 
@@ -96,7 +96,12 @@ for message in r.get_messages():
   if message.subject != "CATE transaction accepted (2)":
     continue
   acceptance = json.loads(message.body)
-  assert_acceptance_valid(acceptance)
+  try:
+    assert_acceptance_valid(acceptance)
+  except MessageError as err:
+    print("Received invalid trade from " + message.author.name)
+    continue
+
   trade_id = acceptance['trade_id']
   audit_directory = ensure_audit_directory_exists(trade_id)
 

@@ -55,8 +55,7 @@ while ready_transactions:
     offer_currency_quantity = offer['offer_currency_quantity']
 
     # Extract the secret from the audit directory
-    # with open(audit_directory + os.path.sep + '2_private_key.txt', "r") as private_key_file:
-    with open(audit_directory + os.path.sep + '2_secret.txt', "r") as private_key_file:
+    with open(audit_directory + os.path.sep + '2_private_key.txt', "r") as private_key_file:
       private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(private_key_file.read()), True)
     # Extract the secret from the audit directory
     with open(audit_directory + os.path.sep + '2_secret.txt', "r") as secret_file:

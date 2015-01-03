@@ -14,7 +14,7 @@ from bitcoin.core.script import *
 import bitcoin.core.scripteval
 import bitcoin.rpc
 from cate import *
-from cate.error import ConfigurationError
+from cate.error import ConfigurationError, MessageError, TradeError
 from cate.tx import *
 
 # 'B' receives the completed TX4 from 'A', verifies the signatures on it
@@ -49,7 +49,7 @@ def process_offer_confirmed(send_notification, audit_directory):
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
   ask_currency_quantity = offer['ask_currency_quantity']
   offer_currency_quantity = offer['offer_currency_quantity']
-  with open(audit_directory + os.path.sep + '1_secret.txt', "r") as secret_file:
+  with open(audit_directory + os.path.sep + '1_private_key.txt', "r") as secret_file:
     private_key_b = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
   public_key_a = bitcoin.core.key.CPubKey(x(acceptance['public_key_a']))
   public_key_b = bitcoin.core.key.CPubKey(private_key_b._cec_key.get_pubkey())
@@ -98,7 +98,11 @@ for message in r.get_messages():
   if message.subject != 'CATE transaction sent (4)':
     break
   send_notification = json.loads(message.body)
-  assert_send_notification_valid(send_notification)
+  try:
+    assert_send_notification_valid(send_notification)
+  except MessageError as err:
+    print("Received invalid trade from " + message.author.name)
+    continue
   trade_id = send_notification['trade_id']
   audit_directory = ensure_audit_directory_exists(trade_id)
 

@@ -13,6 +13,7 @@ import re
 from bitcoin import SelectParams
 import bitcoin.rpc
 from cate import *
+from cate.error import MessageError
 from cate.fees import CFeeRate
 from cate.tx import *
 from cate.fees import CFeeRate
@@ -109,7 +110,7 @@ def process_offer(offer, audit_directory):
   secret_hash = Hash(secret)
   #     Write secret to the audit directory as it's not sent to the peer
   with open(audit_directory + os.path.sep + '2_secret.txt', "w", 0700) as secret_file:
-    secret_file.write(secret)
+    secret_file.write(b2x(secret))
 
   # Generate a key pair to be used to sign transactions. We generate the key
   # directly rather than via a wallet as it's used on both chains.
@@ -161,7 +162,12 @@ for message in r.get_messages():
     continue
 
   offer = json.loads(message.body)
-  assert_offer_valid(offer)
+  try:
+    assert_offer_valid(offer)
+  except MessageError as err:
+    print("Received invalid trade from " + message.author.name)
+    continue
+
   trade_id = offer['trade_id']
   audit_directory = ensure_audit_directory_exists(trade_id)
 

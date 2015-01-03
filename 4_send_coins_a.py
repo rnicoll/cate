@@ -13,7 +13,7 @@ from bitcoin.core import *
 import bitcoin.rpc
 import bitcoin.core.scripteval
 from cate import *
-from cate.error import *
+from cate.error import ConfigurationError, MessageError, TradeError
 from cate.tx import *
 
 def assert_confirmation_valid(confirmation):
@@ -103,7 +103,11 @@ for message in r.get_messages():
   if message.subject != 'CATE transaction confirmed (3)':
     break
   confirmation = json.loads(message.body)
-  assert_confirmation_valid(confirmation)
+  try:
+    assert_confirmation_valid(confirmation)
+  except MessageError as err:
+    print("Received invalid trade from " + message.author.name)
+    continue
   trade_id = confirmation['trade_id']
   audit_directory = ensure_audit_directory_exists(trade_id)
 
