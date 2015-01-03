@@ -43,7 +43,8 @@ for trade_id in os.listdir('audits'):
   ready_transactions[tx3_id] = trade_id
 
 while ready_transactions:
-  for tx3_id in ready_transactions:
+  tx3ids = ready_transactions.keys()
+  for tx3_id in tx3ids:
     audit_directory = 'audits' + os.path.sep + trade_id
     trade_id = ready_transactions[tx3_id]
 
@@ -54,9 +55,19 @@ while ready_transactions:
     ask_currency_quantity = offer['ask_currency_quantity']
     offer_currency_quantity = offer['offer_currency_quantity']
 
-    # Extract the secret from the audit directory
+    # Extract the private key from the audit directory
+    if not os.path.isfile(audit_directory + os.path.sep + '2_private_key.txt'):
+      print "Missing private_key file for trade ID " + trade_id
+      ready_transactions.pop(tx3_id, None)
+      continue
     with open(audit_directory + os.path.sep + '2_private_key.txt', "r") as private_key_file:
       private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(private_key_file.read()), True)
+
+    # Extract the secret from the audit directory
+    if not os.path.isfile(audit_directory + os.path.sep + '2_secret.txt'):
+      print "Missing secret file for trade ID " + trade_id
+      ready_transactions.pop(tx3_id, None)
+      continue
     # Extract the secret from the audit directory
     with open(audit_directory + os.path.sep + '2_secret.txt', "r") as secret_file:
       secret = x(secret_file.read())
@@ -70,15 +81,16 @@ while ready_transactions:
     try:
       tx_details = proxy.gettransaction(tx3_id)
     except IndexError as err:
+      # Transaction is not yet ready
       continue
     if tx_details['confirmations'] == 0:
       continue
 
     # Fetch the original transaction
     tx3 = proxy.getrawtransaction(tx3_id)
-    while not tx3:
-      time.sleep(5)
-      tx3 = proxy.getrawtransaction(tx3_id)
+
+    # FIXME: Verify the secret we have matches the one expected
+    print Hash(secret)
 
     # Get an address to pull the funds into
     own_address = proxy.getnewaddress("CATE " + trade_id)
@@ -90,4 +102,5 @@ while ready_transactions:
     print spend_tx
     proxy.sendrawtransaction(spend_tx)
     ready_transactions.pop(tx3_id, None)
-
+  if ready_transactions:
+    time.sleep(5)
