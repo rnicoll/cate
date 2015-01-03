@@ -88,15 +88,13 @@ def build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash, is_tx1):
   return CScript(
     [
       OP_IF,
-        OP_2DUP, # Multisig
-          OP_HASH256, bitcoin.core.Hash(public_key_a), OP_EQUALVERIFY,
-          OP_HASH256, bitcoin.core.Hash(public_key_b), OP_EQUALVERIFY,
-          2, OP_CHECKMULTISIG,
+        # Multisig
+        OP_DUP, OP_HASH256, bitcoin.core.Hash(public_key_a), OP_EQUALVERIFY, OP_CHECKSIGVERIFY,
+        OP_DUP, OP_HASH256, bitcoin.core.Hash(public_key_b), OP_EQUALVERIFY, OP_CHECKSIG,
       OP_ELSE,
-        OP_DUP, # Secret and single signature
-          OP_HASH256, bitcoin.core.Hash(single_public_key), OP_EQUALVERIFY,
-          OP_CHECKSIGVERIFY,
-        OP_HASH256, secret_hash, OP_EQUAL,
+        # Secret and single signature
+        OP_HASH256, secret_hash, OP_EQUALVERIFY,
+        OP_DUP, OP_HASH256, bitcoin.core.Hash(single_public_key), OP_EQUALVERIFY, OP_CHECKSIG,
       OP_ENDIF
     ]
   )
@@ -205,7 +203,7 @@ def build_tx1_tx3_spend(proxy, tx1, private_key, secret, own_address, fee_rate):
 
   # scriptSig needs to be:
   #     <shared secret> <signature B> <B public key> 0
-  txin.scriptSig = CScript([secret, sig, private_key.pub, 0])
+  txin.scriptSig = CScript([sig, private_key.pub, secret, 0])
 
   return tx
 

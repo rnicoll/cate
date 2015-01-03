@@ -69,7 +69,7 @@ def process_offer_confirmed(confirmation, audit_directory):
   if not public_key_b.verify(sighash, tx2_sig_b):
     raise TradeError("Signature from peer for TX2 is invalid.")
 
-  tx2.vin[0].scriptSig = CScript([OP_0, tx2_sig_b, tx2_sig_a, 2, public_key_b, public_key_a, 2])
+  tx2.vin[0].scriptSig = CScript([tx2_sig_b, public_key_b, tx2_sig_a, public_key_a, 1])
   bitcoin.core.scripteval.VerifyScript(tx2.vin[0].scriptSig, txin_scriptPubKey, tx2, 0, (SCRIPT_VERIFY_P2SH,))
   with open(audit_directory + os.path.sep + '4_tx2.txt', "w") as tx2_file:
     tx2_file.write(b2x(tx2.serialize()))
@@ -101,7 +101,7 @@ except ConfigurationError as e:
 
 for message in r.get_messages():
   if message.subject != 'CATE transaction confirmed (3)':
-    break
+    continue
   confirmation = json.loads(message.body)
   try:
     assert_confirmation_valid(confirmation)

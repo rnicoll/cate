@@ -48,8 +48,8 @@ for trade_id in os.listdir('audits'):
 while ready_transactions:
   tx3ids = ready_transactions.keys()
   for tx3_id in tx3ids:
-    audit_directory = 'audits' + os.path.sep + trade_id
     trade_id = ready_transactions[tx3_id]
+    audit_directory = 'audits' + os.path.sep + trade_id
 
     with open(audit_directory + os.path.sep + '2_offer.json', "r") as offer_file:
       offer = json.loads(offer_file.read())
@@ -80,18 +80,15 @@ while ready_transactions:
 
     # Monitor the block chain for TX3 being relayed
     try:
-      tx_details = proxy.gettransaction(tx3_id)
+      tx3 = proxy.getrawtransaction(tx3_id)
     except IndexError as err:
       # Transaction is not yet ready
-      continue
-    if tx_details['confirmations'] == 0:
+      print "Transaction is unavailable " + str(err)
       continue
 
-    # Fetch the original transaction
-    tx3 = proxy.getrawtransaction(tx3_id)
+    # FIXME: Check TX3 has been confirmed
 
-    # FIXME: Verify the secret we have matches the one expected
-    print "Secret hash: " + b2x(bitcoin.core.serialize.Hash(secret))
+    # TODO: Verify the secret we have matches the one expected
 
     # Get an address to pull the funds into
     own_address = proxy.getnewaddress("CATE " + trade_id)
@@ -100,8 +97,6 @@ while ready_transactions:
     tx_spend = build_tx1_tx3_spend(proxy, tx3, private_key_a, secret, own_address, fee_rate)
 
     # Send the transaction to the blockchain
-    print tx3
-    print tx_spend
     bitcoin.core.scripteval.VerifyScript(tx_spend.vin[0].scriptSig, tx3.vout[0].scriptPubKey, tx_spend, 0, (SCRIPT_VERIFY_P2SH,))
     proxy.sendrawtransaction(tx_spend)
     ready_transactions.pop(tx3_id, None)
