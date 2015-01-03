@@ -9,6 +9,8 @@ from bitcoin import SelectParams
 import bitcoin.rpc
 from bitcoin.core import *
 import bitcoin.core.scripteval
+import bitcoin.core.serialize
+
 from cate import *
 from cate.error import ConfigurationError
 from cate.fees import CFeeRate
@@ -69,9 +71,7 @@ while ready_transactions:
       print "Missing secret file for trade ID " + trade_id
       ready_transactions.pop(tx3_id, None)
       continue
-    # Extract the secret from the audit directory
-    with open(audit_directory + os.path.sep + '2_secret.txt', "r") as secret_file:
-      secret = x(secret_file.read())
+    secret = read_secret(audit_directory)
 
     # Connect to the wallet
     bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
@@ -91,7 +91,7 @@ while ready_transactions:
     tx3 = proxy.getrawtransaction(tx3_id)
 
     # FIXME: Verify the secret we have matches the one expected
-    print b2x(Hash(secret))
+    print "Secret hash: " + b2x(bitcoin.core.serialize.Hash(secret))
 
     # Get an address to pull the funds into
     own_address = proxy.getnewaddress("CATE " + trade_id)
@@ -100,6 +100,7 @@ while ready_transactions:
     tx_spend = build_tx1_tx3_spend(proxy, tx3, private_key_a, secret, own_address, fee_rate)
 
     # Send the transaction to the blockchain
+    print tx3
     print tx_spend
     bitcoin.core.scripteval.VerifyScript(tx_spend.vin[0].scriptSig, tx3.vout[0].scriptPubKey, tx_spend, 0, (SCRIPT_VERIFY_P2SH,))
     proxy.sendrawtransaction(tx_spend)

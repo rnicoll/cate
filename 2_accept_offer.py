@@ -12,6 +12,8 @@ import re
 
 from bitcoin import SelectParams
 import bitcoin.rpc
+import bitcoin.core.serialize
+
 from cate import *
 from cate.error import MessageError
 from cate.fees import CFeeRate
@@ -107,10 +109,8 @@ def process_offer(offer, audit_directory):
   
   #	Generate a very large secret number (i.e. around 128 bits)
   secret = os.urandom(16)
-  secret_hash = Hash(secret)
-  #     Write secret to the audit directory as it's not sent to the peer
-  with open(audit_directory + os.path.sep + '2_secret.txt', "w", 0700) as secret_file:
-    secret_file.write(b2x(secret))
+  secret_hash = bitcoin.core.Hash(secret)
+  write_secret(audit_directory, secret)
 
   # Generate a key pair to be used to sign transactions. We generate the key
   # directly rather than via a wallet as it's used on both chains.
@@ -136,7 +136,7 @@ def process_offer(offer, audit_directory):
   #	Send TX2 to remote user along with our address
   return {
     'trade_id': trade_id,
-    'secret_hash': b2x(Hash(secret)),
+    'secret_hash': b2x(secret_hash),
     'public_key_a': b2x(public_key_a),
     'tx2': b2x(tx2.serialize())
   }

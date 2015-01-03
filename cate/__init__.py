@@ -76,3 +76,12 @@ def reddit_login(r, config):
     raise error.ConfigurationError("Could not log in to reddit with provided username and password")
 
   return
+
+def write_secret(audit_directory, secret):
+  with open(audit_directory + os.path.sep + '2_secret.txt', "w", 0700) as secret_file:
+    secret_file.write(b2x(secret))
+
+def read_secret(audit_directory):
+  with open(audit_directory + os.path.sep + '2_secret.txt', "r") as secret_file:
+    secret = x(secret_file.read())
+  return secret

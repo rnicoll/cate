@@ -13,6 +13,7 @@ import error
 
 from bitcoin.core import *
 from bitcoin.core.script import *
+import bitcoin.core.serialize
 
 def assert_tx2_valid(tx2):
   """
@@ -88,12 +89,12 @@ def build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash, is_tx1):
     [
       OP_IF,
         OP_2DUP, # Multisig
-          OP_HASH256, Hash(public_key_a), OP_EQUALVERIFY,
-          OP_HASH256, Hash(public_key_b), OP_EQUALVERIFY,
+          OP_HASH256, bitcoin.core.Hash(public_key_a), OP_EQUALVERIFY,
+          OP_HASH256, bitcoin.core.Hash(public_key_b), OP_EQUALVERIFY,
           2, OP_CHECKMULTISIG,
       OP_ELSE,
         OP_DUP, # Secret and single signature
-          OP_HASH256, Hash(single_public_key), OP_EQUALVERIFY,
+          OP_HASH256, bitcoin.core.Hash(single_public_key), OP_EQUALVERIFY,
           OP_CHECKSIGVERIFY,
         OP_HASH256, secret_hash, OP_EQUAL,
       OP_ENDIF
