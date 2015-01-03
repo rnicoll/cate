@@ -58,4 +58,4 @@ for trade_id in os.listdir('audits'):
 
   # Add a file to indicate the TX is complete
   with open(directory_path + os.path.sep + '7_complete.txt', "w", 0700) as completion_file:
-    completion_file.write(tx4.GetHash())
+    completion_file.write(b2lx(tx4.GetHash()))

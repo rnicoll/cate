@@ -105,6 +105,6 @@ while ready_transactions:
 
     # Add a file to indicate the TX is complete
     with open(audit_directory + os.path.sep + '6_complete.txt', "w", 0700) as completion_file:
-      completion_file.write(tx_spend.GetHash())
+      completion_file.write(b2lx(tx_spend.GetHash()))
   if ready_transactions:
     time.sleep(5)
