@@ -51,7 +51,7 @@ for trade_id in os.listdir('audits'):
   try:
     proxy.sendrawtransaction(tx4)
   except bitcoin.rpc.JSONRPCException as err:
-    if err.error['code'] == -26:
+    if err.error['code'] == -25:
       print "TX3 has already been spent"
     else:
       raise err

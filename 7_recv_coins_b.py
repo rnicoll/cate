@@ -164,7 +164,13 @@ while ready_transactions:
     print tx1
     print tx_spend
     bitcoin.core.scripteval.VerifyScript(tx_spend.vin[0].scriptSig, tx1.vout[0].scriptPubKey, tx_spend, 0, (SCRIPT_VERIFY_P2SH,))
-    proxy.sendrawtransaction(tx_spend)
+    try:
+      proxy.sendrawtransaction(tx_spend)
+    except bitcoin.rpc.JSONRPCException as err:
+      if err.error['code'] == -25:
+        print "TX1 for trade " + trade_id + " has already been spent"
+      else:
+        raise err
     ready_transactions.pop(tx1_id, None)
 
     # Add a file to indicate the TX is complete
