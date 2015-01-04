@@ -72,7 +72,7 @@ def process_offer_confirmed(send_notification, audit_directory):
   if not public_key_a.verify(sighash, tx4_sig_a):
     raise TradeError("Signature from peer for TX4 is invalid.")
 
-  tx4.vin[0].scriptSig = CScript([tx4_sig_b, public_key_b, tx4_sig_a, public_key_a, 1])
+  tx4.vin[0].scriptSig = CScript([tx4_sig_b, public_key_b, 1, tx4_sig_a, public_key_a])
   bitcoin.core.scripteval.VerifyScript(tx4.vin[0].scriptSig, txin_scriptPubKey, tx4, 0, (SCRIPT_VERIFY_P2SH,))
   with open(audit_directory + os.path.sep + '5_tx4.txt', "w") as tx4_file:
     tx4_file.write(b2x(tx4.serialize()))
