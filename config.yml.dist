@@ -7,12 +7,12 @@ daemons:
     network: testnet
     port: 18332
     config: /home/jrn/.bitcoin/bitcoin.conf
-    fee_per_kb: 10000
+    fee_per_kb: 100000
   LTC:
     network: testnet
     port: 19332
     config: /home/jrn/.litecoin/litecoin.conf
-    fee_per_kb: 10000
+    fee_per_kb: 100000
   DOGE:
     network: testnet
     port: 44555
