@@ -15,19 +15,30 @@ import bitcoin.rpc
 from cate import *
 from cate.error import ConfigurationError
 from cate.fees import CFeeRate
-from cate.tx import build_tx1_tx3_spend
+from cate.tx import build_tx1_tx3_spend, extract_secret_from_vin
 
-def find_txin_with_in(proxy, block, vout):
+def find_txin_matching_output(tx, vout):
+  """
+  Searches the given block for a transaction with the input provided
+
+  Returns the TX if a match is found, or None otherwise
+  """
+  for inpoint in tx.vin:
+    prevout = inpoint.prevout
+    if prevout.hash == vout.hash and prevout.n == vout.n:
+      return inpoint
+  return None
+
+def find_tx_matching_output(block, vout):
   """
   Searches the given block for a transaction with the input provided
   
-  Returns the TX input, or None if no match found
+  Returns the TX if a match is found, or None otherwise
   """
   for tx in block.vtx:
-    for inpoint in tx.vin:
-      prevout = inpoint.prevout
-      if prevout.hash == vout.hash and prevout.n == vout.n:
-        return inpoint
+    txin = find_txin_matching_output(tx, vout)
+    if txin:
+      return tx
   return None
 
 def get_first_block(proxy, audit_directory):
@@ -126,25 +137,19 @@ while ready_transactions:
     # Monitor the other block chain for a transaction spending the outputs from TX3
     (height, block) = get_first_block(proxy, audit_directory)
     height += 1
-    tx3_vin = find_txin_with_in(proxy, block, COutPoint(tx3.GetHash(), 0))
-    while not tx3_vin:
+    tx3_vout = COutPoint(tx3.GetHash(), 0)
+    tx3_spend = find_tx_matching_output(block, tx3_vout)
+    while not tx3_spend:
       try:
         block = proxy.getblock(proxy.getblockhash(height))
         height += 1
       except IndexError as err:
         time.sleep(5)
         continue
-      tx3_vin = find_txin_with_in(proxy, block, COutPoint(tx3.GetHash(), 0))
+      tx3_spend = find_tx_matching_output(block, tx3_vout)
 
-    # Extract the secret from the transaction output script
-    sig_elements = []
-    for sig_element in tx3_vin.scriptSig:
-      sig_elements.append(sig_element)
-    if len(sig_elements) < 3:
-      # TODO: we should keep a note of which transaction this is, so we can
-      # report the TX ID
-      raise TradeError("Cannot extract shared secret from scriptSig of transaction.")
-    secret = sig_elements[2]
+    tx3_in = find_txin_matching_output(tx3_spend, tx3_vout)
+    secret = extract_secret_from_vin(tx3_spend, tx3_in)
 
     # Connect to the wallet we're receiving coins from
     bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
@@ -158,14 +163,12 @@ while ready_transactions:
     tx1 = proxy.getrawtransaction(tx1_id)
 
     # Create a new transaction spending TX1, using the secret and our private key
-    tx_spend = build_tx1_tx3_spend(proxy, tx1, private_key_a, secret, own_address, fee_rate)
+    tx1_spend = build_tx1_tx3_spend(proxy, tx1, private_key_a, secret, own_address, fee_rate)
 
     # Send the transaction to the blockchain
-    print tx1
-    print tx_spend
-    bitcoin.core.scripteval.VerifyScript(tx_spend.vin[0].scriptSig, tx1.vout[0].scriptPubKey, tx_spend, 0, (SCRIPT_VERIFY_P2SH,))
+    bitcoin.core.scripteval.VerifyScript(tx1_spend.vin[0].scriptSig, tx1.vout[0].scriptPubKey, tx1_spend, 0, (SCRIPT_VERIFY_P2SH,))
     try:
-      proxy.sendrawtransaction(tx_spend)
+      proxy.sendrawtransaction(tx1_spend)
     except bitcoin.rpc.JSONRPCException as err:
       if err.error['code'] == -25:
         print "TX1 for trade " + trade_id + " has already been spent"
@@ -175,7 +178,7 @@ while ready_transactions:
 
     # Add a file to indicate the TX is complete
     with open(audit_directory + os.path.sep + '7_complete.txt', "w", 0700) as completion_file:
-      completion_file.write(b2lx(tx_spend.GetHash()))
+      completion_file.write(b2lx(tx1_spend.GetHash()))
 
   if ready_transactions:
     time.sleep(5)

@@ -1,3 +1,4 @@
+import calendar
 import json
 import os.path
 import socket
@@ -36,7 +37,7 @@ for trade_id in os.listdir('audits'):
   with open(directory_path + os.path.sep + '4_tx2.txt', "r") as tx2_file:
     tx2 = CTransaction.deserialize(x(tx2_file.read()))
 
-  if tx2.nLockTime > time.gmtime():
+  if tx2.nLockTime > calendar.timegm(time.gmtime()):
     # Transaction is still locked
     continue
 
@@ -53,6 +54,11 @@ for trade_id in os.listdir('audits'):
   except bitcoin.rpc.JSONRPCException as err:
     if err.error['code'] == -25:
         print "TX1 for trade " + trade_id + " has already been spent"
+    if err.error['code'] == -26:
+        print "Refund transaction is not yet final; please wait 48 hours after the start of the trade"
+        continue
+    if err.error['code'] == -27:
+        print "Refund transaction " + b2x(tx2.GetHash()) + " has already been sent"
     else:
       raise err
 

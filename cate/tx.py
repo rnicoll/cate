@@ -71,6 +71,27 @@ def find_inputs(proxy, quantity):
 
   return (txins, total_in)
 
+def extract_secret_from_vin(tx, vin):
+  """
+  Searches for the secret from the scriptSig of the given input
+  """
+  # Extract the secret from the transaction output script
+  sig_elements = []
+  for sig_element in vin.scriptSig:
+    sig_elements.append(sig_element)
+  if len(sig_elements) < 3:
+    raise TradeError("Cannot extract shared secret from scriptSig of transaction " + b2x(tx.GetHash()))
+  public_key_a = sig_elements.pop()
+  sig_a = sig_elements.pop()
+  tx_type = sig_elements.pop()
+
+  # TODO: Should verify the public key and signature are as expected
+  if tx_type == 0:
+    # If the transaction was refunded back to its sender, rather than spent
+    raise TradeError("Signatures on transaction " + b2x(tx.GetHash()) + " are from the refund TX, not the spending TX.")
+
+  return sig_elements.pop()
+
 def build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash, is_tx1):
   """
   Generates the script for TX1/TX3's main output (i.e. not the change output)
@@ -91,7 +112,7 @@ def build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash, is_tx1):
     [
       OP_DUP, OP_HASH160, bitcoin.core.Hash160(peer_public_key), OP_EQUALVERIFY, OP_CHECKSIGVERIFY,
       OP_IF,
-        # Multisig
+        # Top of stack is not zero, script matches a pair of signatures
         OP_DUP, OP_HASH160, bitcoin.core.Hash160(own_public_key), OP_EQUALVERIFY, OP_CHECKSIG,
       OP_ELSE,
         # Secret and single signature
