@@ -97,7 +97,7 @@ audit.save_private_key('1_private_key.txt', cec_key.get_secretbytes())
 trade = input_trade(trade_id, cec_key.get_pubkey())
 audit.save_json('1_offer.json', trade)
 
-#r.send_message(target_redditor, 'CATE transaction offer (1)', json.dumps(trade))
+r.send_message(target_redditor, 'CATE transaction offer (1)', json.dumps(trade))
 
 print "Offer sent"
 
