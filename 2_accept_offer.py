@@ -143,7 +143,7 @@ except ConfigurationError as e:
   print e
   sys.exit(1)
 
-r = praw.Reddit(user_agent = "CATE - Cross-chain Atomic Trading Engine")
+r = praw.Reddit(user_agent = USER_AGENT)
 try:
   reddit_login(r, config)
 except ConfigurationError as e:

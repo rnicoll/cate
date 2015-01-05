@@ -27,6 +27,8 @@ NETWORK_CODES = {
   'f5ae71e26c74beacc88382716aced69cddf3dffff24f384e1808905e0188f68f': 'LTC'
 }
 
+USER_AGENT = 'CATE - Cross-chain Atomic Trading Engine v0.1'
+
 def load_configuration(filename):
   if not os.path.isfile(filename):
     raise error.ConfigurationError("Expected configuration file '" + filename + "'")
