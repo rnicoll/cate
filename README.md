@@ -23,8 +23,13 @@ Requirements
 CATE requires both Bitcoin Core and Dogecoin Core wallets, as it bridges between
 the two.
 
-CATE requires python-bitcoinlib modified to support Dogecoin - this is currently
-not publicly available, but I'll try to get that out ASAP.
+CATE requires python-bitcoinlib modified to support Dogecoin, which you can download from
+my Github at https://github.com/rnicoll/python-bitcoinlib/tree/master-dogecoin-keygen .
+A more permanent solution of an altcoin library wrapper around python-bitcoinlib is being
+worked on.
+
+Lastly, CATE requires the "praw" library for accessing reddit. praw can be installed
+via "pip"
 
 Setup
 =====
