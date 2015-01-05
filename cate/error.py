@@ -1,3 +1,11 @@
+# Raised where there's an inconsistency in the audit state
+# (i.e. files present that should be missing, or vice-versa)
+class AuditError(Exception):
+  def __init__(self, value):
+    self.value = value
+  def __str__(self):
+    return repr(self.value)
+
 # Raised in case of an issue with the configuration
 class ConfigurationError(Exception):
   def __init__(self, value):

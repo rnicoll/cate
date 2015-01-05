@@ -1,7 +1,6 @@
 import praw
 import json
 import os.path
-from StringIO import StringIO
 import yaml
 import sys
 import uuid
@@ -73,8 +72,8 @@ except ConfigurationError as e:
   sys.exit(1)
 
 # Create a unique trade ID
-trade_id = uuid.uuid4().urn[9:]
-audit_directory = ensure_audit_directory_exists(trade_id)
+trade_id = uuid.uuid1().urn[9:]
+audit = TradeDao(trade_id)
 
 # Query the user for details of the transaction
 target_redditor = None
@@ -93,20 +92,12 @@ while target_redditor == None:
 cec_key = bitcoin.core.key.CECKey()
 cec_key.generate()
 cec_key.set_compressed(True)
-with open(audit_directory + os.path.sep + '1_private_key.txt', "w", 0700) as private_key_file:
-  private_key_file.write(b2x(cec_key.get_secretbytes()))
+audit.save_private_key('1_private_key.txt', cec_key.get_secretbytes())
 
 trade = input_trade(trade_id, cec_key.get_pubkey())
-io = StringIO()
-json.dump(trade, io)
+audit.save_json('1_offer.json', trade)
 
-# Record the offer
-with open(audit_directory + os.path.sep + '1_offer.json', "w", 0700) as offer_file:
-  offer_file.write(io.getvalue())
-
-trade_json = io.getvalue()
-
-r.send_message(target_redditor, 'CATE transaction offer (1)', trade_json)
+#r.send_message(target_redditor, 'CATE transaction offer (1)', json.dumps(trade))
 
 print "Offer sent"
 

@@ -136,7 +136,7 @@ def build_tx1_tx3(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_
   returns a CTransaction
   """
   # TODO: Use actual transaction size once we have a good estimate
-  quantity_inc_fee = quantity + fee_rate.get_fee(2000)
+  quantity_inc_fee = quantity + fee_rate.get_fee(1000)
   (txins, total_in) = find_inputs(proxy, quantity_inc_fee)
 
   txout = CTxOut(quantity, build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash, is_tx1))

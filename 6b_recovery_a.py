@@ -26,23 +26,18 @@ except ConfigurationError as e:
 
 # Scan the audit directory for transactions ready to spend
 for trade_id in os.listdir('audits'):
-  directory_path = 'audits' + os.path.sep + trade_id
-  if not os.path.isdir(directory_path):
+  audit = TradeDao(trade_id)
+  if not audit.file_exists('4_tx2.txt'):
     continue
-  if not os.path.isfile(directory_path + os.path.sep + '4_tx2.txt'):
-    continue
-  if os.path.isfile(directory_path + os.path.sep + '6_complete.txt'):
+  if audit.file_exists('6_complete.txt'):
     continue
   # Load TX2 to find its block time
-  with open(directory_path + os.path.sep + '4_tx2.txt', "r") as tx2_file:
-    tx2 = CTransaction.deserialize(x(tx2_file.read()))
-
+  tx2 = audit.load_tx('4_tx2.txt')
   if tx2.nLockTime > calendar.timegm(time.gmtime()):
     # Transaction is still locked
     continue
 
-  with open(directory_path + os.path.sep + '2_offer.json', "r") as offer_file:
-    offer = json.loads(offer_file.read())
+  offer = audit.load_json('2_offer.json')
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
 
   # Connect to the wallet
@@ -58,10 +53,9 @@ for trade_id in os.listdir('audits'):
         print "Refund transaction is not yet final; please wait 48 hours after the start of the trade"
         continue
     if err.error['code'] == -27:
-        print "Refund transaction " + b2x(tx2.GetHash()) + " has already been sent"
+        print "Refund transaction " + b2lx(tx2.GetHash()) + " has already been sent"
     else:
       raise err
 
   # Add a file to indicate the TX is complete
-  with open(directory_path + os.path.sep + '6_complete.txt', "w", 0700) as completion_file:
-    completion_file.write(b2lx(tx2.GetHash()))
+  audit.save_text('6_complete.txt', b2lx(tx2.GetHash()))

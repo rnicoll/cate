@@ -1,13 +1,9 @@
 import praw
-from bitcoin.base58 import decode
 import calendar
 import datetime
-from decimal import Decimal
-import hashlib
 import json
 import os.path
 import socket
-from StringIO import StringIO
 import sys
 
 from bitcoin import SelectParams
@@ -33,18 +29,14 @@ def assert_acceptance_valid(acceptance):
   if len(acceptance['secret_hash']) != 64:
     raise MessageError( "Hash of secret is the wrong length.")
 
-def process_offer_accepted(acceptance, audit_directory):
+def process_offer_accepted(acceptance, audit):
   trade_id = acceptance['trade_id']
   secret_hash = x(acceptance['secret_hash'])
   tx2 = CTransaction.deserialize(x(acceptance['tx2']))
 
   # Load the offer sent
-  with open(audit_directory + os.path.sep + '1_offer.json', "r") as offer_file:
-    offer = json.loads(offer_file.read())
-
+  offer = audit.load_json('1_offer.json')
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
-  ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
-  ask_currency_quantity = offer['ask_currency_quantity']
   offer_currency_quantity = offer['offer_currency_quantity']
 
   # Connect to the daemon
@@ -54,8 +46,7 @@ def process_offer_accepted(acceptance, audit_directory):
   fee_rate = CFeeRate(config['daemons'][offer_currency_code]['fee_per_kb'])
 
   public_key_a = bitcoin.core.key.CPubKey(x(acceptance['public_key_a']))
-  with open(audit_directory + os.path.sep + '1_private_key.txt', "r") as private_key_file:
-    private_key_b = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(private_key_file.read()), True)
+  private_key_b = audit.load_private_key('1_private_key.txt')
   public_key_b = bitcoin.core.key.CPubKey(x(offer['public_key_b']))
 
   assert_tx2_valid(tx2)
@@ -70,8 +61,7 @@ def process_offer_accepted(acceptance, audit_directory):
   tx4 = build_unsigned_tx4(proxy, tx3, own_address, lock_time, fee_rate)
 
   #     Write TX3 to audit directory as we don't send it yet
-  with open(audit_directory + os.path.sep + '3_tx3.txt', "w") as tx3_file:
-    tx3_file.write(b2x(tx3.serialize()))
+  audit.save_tx('3_tx3.txt', tx3)
 
   return {
     'trade_id': trade_id,
@@ -103,28 +93,20 @@ for message in r.get_messages():
     continue
 
   trade_id = acceptance['trade_id']
-  audit_directory = ensure_audit_directory_exists(trade_id)
-
-  audit_filename = audit_directory + os.path.sep + '3_acceptance.json'
-  if os.path.isfile(audit_filename):
+  audit = TradeDao(trade_id)
+  if audit.file_exists('3_acceptance.json'):
     print "Offer acceptance " + trade_id + " already received, ignoring offer"
     continue
+  audit.save_json('3_acceptance.json', acceptance)
 
-  # Record the received response
-  with open(audit_directory + os.path.sep + '3_acceptance.json', "w", 0700) as response_file:
-    io = StringIO()
-    json.dump(acceptance, io, indent=4, separators=(',', ': '))
-    response_file.write(io.getvalue())
-
-  response = process_offer_accepted(acceptance, audit_directory)
+  try:
+    response = process_offer_accepted(acceptance, audit)
+  except socket.error as err:
+    print "Could not connect to wallet."
+    sys.exit(1)
   if not response:
     break
 
-  io = StringIO()
-  json.dump(response, io)
+  audit.save_json('3_confirmation.json', response)
 
-  # Record the message
-  with open(audit_directory + os.path.sep + '3_confirmation.json', "w", 0700) as response_file:
-    response_file.write(io.getvalue())
-
-  r.send_message(message.author, 'CATE transaction confirmed (3)', io.getvalue())
+  r.send_message(message.author, 'CATE transaction confirmed (3)', json.dumps(response))

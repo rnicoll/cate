@@ -1,11 +1,8 @@
 import praw
-from bitcoin.base58 import decode
-from decimal import Decimal
 import hashlib
 import json
 import os.path
 import socket
-from StringIO import StringIO
 import sys
 
 from bitcoin import SelectParams
@@ -28,7 +25,7 @@ def assert_send_notification_valid(send_notification):
   if 'tx4_sig' not in send_notification:
     raise MessageError( "Missing TX4 signature from confirmed offer.")
 
-def process_offer_confirmed(send_notification, audit_directory):
+def process_offer_confirmed(send_notification, audit):
   """
   1. Receives the completed TX2 and the partial TX4 from 'B'.
   2. Verifies the signatures on TX2 are valid
@@ -38,19 +35,13 @@ def process_offer_confirmed(send_notification, audit_directory):
   6. Submits TX1 to the network
   """
 
-  with open(audit_directory + os.path.sep + '1_offer.json', "r") as offer_file:
-    offer = json.loads(offer_file.read())
-  with open(audit_directory + os.path.sep + '3_acceptance.json', "r") as acceptance_file:
-    acceptance = json.loads(acceptance_file.read())
-  with open(audit_directory + os.path.sep + '3_confirmation.json', "r") as confirmation_file:
-    confirmation = json.loads(confirmation_file.read())
+  offer = audit.load_json('1_offer.json')
+  acceptance = audit.load_json('3_acceptance.json')
+  confirmation = audit.load_json('3_confirmation.json')
 
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
-  ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
-  ask_currency_quantity = offer['ask_currency_quantity']
   offer_currency_quantity = offer['offer_currency_quantity']
-  with open(audit_directory + os.path.sep + '1_private_key.txt', "r") as secret_file:
-    private_key_b = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(secret_file.read()), True)
+  private_key_b = audit.load_private_key('1_private_key.txt')
   public_key_a = bitcoin.core.key.CPubKey(x(acceptance['public_key_a']))
   public_key_b = bitcoin.core.key.CPubKey(private_key_b._cec_key.get_pubkey())
   secret_hash = x(acceptance['secret_hash'])
@@ -60,8 +51,7 @@ def process_offer_confirmed(send_notification, audit_directory):
   bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
 
-  with open(audit_directory + os.path.sep + '3_tx3.txt', "r") as tx3_file:
-    tx3 = CTransaction.deserialize(x(tx3_file.read()))
+  tx3 = audit.load_tx('3_tx3.txt')
   tx4 = CMutableTransaction.from_tx(CTransaction.deserialize(x(confirmation['tx4'])))
 
   # Apply signatures to TX2 and check the result is valid
@@ -74,8 +64,7 @@ def process_offer_confirmed(send_notification, audit_directory):
 
   tx4.vin[0].scriptSig = CScript([tx4_sig_b, public_key_b, 1, tx4_sig_a, public_key_a])
   bitcoin.core.scripteval.VerifyScript(tx4.vin[0].scriptSig, txin_scriptPubKey, tx4, 0, (SCRIPT_VERIFY_P2SH,))
-  with open(audit_directory + os.path.sep + '5_tx4.txt', "w") as tx4_file:
-    tx4_file.write(b2x(tx4.serialize()))
+  audit.save_tx('5_tx4.txt', tx4)
 
   proxy.sendrawtransaction(tx3)
 
@@ -104,20 +93,20 @@ for message in r.get_messages():
     print("Received invalid trade from " + message.author.name)
     continue
   trade_id = send_notification['trade_id']
-  audit_directory = ensure_audit_directory_exists(trade_id)
+  audit = TradeDao(trade_id)
 
-  audit_filename = audit_directory + os.path.sep + '5_send_notification.json'
-  if os.path.isfile(audit_filename):
+  if audit.file_exists('5_send_notification.json'):
     print "Offer send_notification " + trade_id + " already received, ignoring offer"
     continue
 
   # Record the received response
-  with open(audit_directory + os.path.sep + '5_send_notification.json', "w", 0700) as response_file:
-    io = StringIO()
-    json.dump(send_notification, io, indent=4, separators=(',', ': '))
-    response_file.write(io.getvalue())
+  audit.save_json('5_send_notification.json', send_notification)
 
-  response = process_offer_confirmed(send_notification, audit_directory)
+  try:
+    response = process_offer_confirmed(send_notification, audit)
+  except socket.error as err:
+    print "Could not connect to wallet."
+    sys.exit(1)
   if not response:
     break
 

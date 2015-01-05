@@ -6,7 +6,6 @@ import json
 import locale
 import os.path
 import socket
-from StringIO import StringIO
 import sys
 import re
 
@@ -15,10 +14,9 @@ import bitcoin.rpc
 import bitcoin.core.serialize
 
 from cate import *
-from cate.error import MessageError
+from cate.error import AuditError, ConfigurationError, MessageError
 from cate.fees import CFeeRate
 from cate.tx import *
-from cate.fees import CFeeRate
 
 def assert_offer_valid(offer):
   """
@@ -77,7 +75,7 @@ def assert_offer_valid(offer):
 
   return
 
-def process_offer(offer, audit_directory):
+def process_offer(offer, audit):
   """
   Parses and validates an offer from step 1, and if the user agrees to the offer,
   generates the "send" and "refund" transactions.
@@ -110,15 +108,14 @@ def process_offer(offer, audit_directory):
   #	Generate a very large secret number (i.e. around 128 bits)
   secret = os.urandom(16)
   secret_hash = bitcoin.core.Hash(secret)
-  write_secret(audit_directory, secret)
+  audit.save_secret('2_secret.txt', secret)
 
   # Generate a key pair to be used to sign transactions. We generate the key
   # directly rather than via a wallet as it's used on both chains.
   cec_key = bitcoin.core.key.CECKey()
   cec_key.generate()
   cec_key.set_compressed(True)
-  with open(audit_directory + os.path.sep + '2_private_key.txt', "w", 0700) as private_key_file:
-    private_key_file.write(b2x(cec_key.get_secretbytes()))
+  audit.save_private_key('2_private_key.txt', cec_key.get_secretbytes())
   public_key_a = cec_key.get_pubkey()
   private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(cec_key.get_secretbytes(), True)
 
@@ -130,8 +127,7 @@ def process_offer(offer, audit_directory):
   tx2 = build_unsigned_tx2(proxy, tx1, own_address, lock_time, fee_rate)
 
   #     Write TX1 to the audit directory as it's not sent to the peer
-  with open(audit_directory + os.path.sep + '2_tx1.txt', "w") as tx1_file:
-    tx1_file.write(b2x(tx1.serialize()))
+  audit.save_tx('2_tx1.txt', tx1)
 
   #	Send TX2 to remote user along with our address
   return {
@@ -169,34 +165,20 @@ for message in r.get_messages():
     continue
 
   trade_id = offer['trade_id']
-  audit_directory = ensure_audit_directory_exists(trade_id)
-
-  # Log the incoming offer
-  audit_directory = ensure_audit_directory_exists(trade_id)
-  audit_filename = audit_directory + os.path.sep + '2_offer.json'
-  if os.path.isfile(audit_filename):
+  audit = TradeDao(trade_id)
+  if audit.file_exists('2_offer.json'):
     print "Offer " + trade_id + " already received, ignoring offer"
     continue
-
-  with open(audit_filename, "w") as audit_file:
-    io = StringIO()
-    json.dump(offer, io, indent=4, separators=(',', ': '))
-    audit_file.write(io.getvalue())
+  audit.save_json('2_offer.json', offer)
 
   try:
-    response = process_offer(offer, audit_directory)
+    response = process_offer(offer, audit)
   except socket.error as err:
     print "Could not connect to wallet."
     sys.exit(1)
-
   if not response:
     break
 
-  io = StringIO()
-  json.dump(response, io)
+  audit.save_json('2_acceptance.json', response)
 
-  # Record the message
-  with open(audit_directory + os.path.sep + '2_acceptance.json', "w", 0700) as response_file:
-    response_file.write(io.getvalue())
-
-  r.send_message(message.author, 'CATE transaction accepted (2)', io.getvalue())
+  r.send_message(message.author, 'CATE transaction accepted (2)', json.dumps(response))

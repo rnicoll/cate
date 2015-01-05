@@ -1,11 +1,7 @@
 import praw
-from bitcoin.base58 import decode
-from decimal import Decimal
-import hashlib
 import json
 import os.path
 import socket
-from StringIO import StringIO
 import sys
 
 from bitcoin import SelectParams
@@ -26,7 +22,7 @@ def assert_confirmation_valid(confirmation):
   if 'tx4' not in confirmation:
     raise MessageError( "Missing TX4 refund transaction from confirmed offer.")
 
-def process_offer_confirmed(confirmation, audit_directory):
+def process_offer_confirmed(confirmation, audit):
   """
   1. Receives the completed TX2 and the partial TX4 from 'B'.
   2. Verifies the signatures on TX2 are valid
@@ -35,18 +31,12 @@ def process_offer_confirmed(confirmation, audit_directory):
   5. Returns TX4 to 'B'
   6. Submits TX1 to the network
   """
+  offer = audit.load_json('2_offer.json')
+  acceptance = audit.load_json('2_acceptance.json')
 
-  with open(audit_directory + os.path.sep + '2_offer.json', "r") as offer_file:
-    offer = json.loads(offer_file.read())
-  with open(audit_directory + os.path.sep + '2_acceptance.json', "r") as acceptance_file:
-    acceptance = json.loads(acceptance_file.read())
-
-  offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
   ask_currency_quantity = offer['ask_currency_quantity']
-  offer_currency_quantity = offer['offer_currency_quantity']
-  with open(audit_directory + os.path.sep + '2_private_key.txt', "r") as private_key_file:
-    private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(x(private_key_file.read()), True)
+  private_key_a = audit.load_private_key('2_private_key.txt')
   public_key_a = bitcoin.core.key.CPubKey(private_key_a._cec_key.get_pubkey())
   public_key_b = bitcoin.core.key.CPubKey(x(offer['public_key_b']))
   secret_hash = x(acceptance['secret_hash'])
@@ -56,8 +46,7 @@ def process_offer_confirmed(confirmation, audit_directory):
   bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
 
-  with open(audit_directory + os.path.sep + '2_tx1.txt', "r") as tx1_file:
-    tx1 = CTransaction.deserialize(x(tx1_file.read()))
+  tx1 = audit.load_tx('2_tx1.txt')
   tx2 = CMutableTransaction.from_tx(CTransaction.deserialize(x(acceptance['tx2'])))
   tx4 = CTransaction.deserialize(x(confirmation['tx4']))
 
@@ -71,8 +60,7 @@ def process_offer_confirmed(confirmation, audit_directory):
 
   tx2.vin[0].scriptSig = CScript([tx2_sig_a, public_key_a, 1, tx2_sig_b, public_key_b])
   bitcoin.core.scripteval.VerifyScript(tx2.vin[0].scriptSig, txin_scriptPubKey, tx2, 0, (SCRIPT_VERIFY_P2SH,))
-  with open(audit_directory + os.path.sep + '4_tx2.txt', "w") as tx2_file:
-    tx2_file.write(b2x(tx2.serialize()))
+  audit.save_tx('4_tx2.txt', tx2)
 
   # Verify the TX4 returned by the peer, then sign it
   assert_tx2_valid(tx4)
@@ -109,28 +97,22 @@ for message in r.get_messages():
     print("Received invalid trade from " + message.author.name)
     continue
   trade_id = confirmation['trade_id']
-  audit_directory = ensure_audit_directory_exists(trade_id)
-
-  audit_filename = audit_directory + os.path.sep + '4_confirmation.json'
-  if os.path.isfile(audit_filename):
+  audit = TradeDao(trade_id)
+  if audit.file_exists('4_confirmation.json'):
     print "Offer confirmation " + trade_id + " already received, ignoring offer"
     continue
 
   # Record the received response
-  with open(audit_directory + os.path.sep + '4_confirmation.json', "w", 0700) as response_file:
-    io = StringIO()
-    json.dump(confirmation, io, indent=4, separators=(',', ': '))
-    response_file.write(io.getvalue())
+  audit.save_json('4_confirmation.json', confirmation)
 
-  response = process_offer_confirmed(confirmation, audit_directory)
+  try:
+    response = process_offer_confirmed(confirmation, audit)
+  except socket.error as err:
+    print "Could not connect to wallet."
+    sys.exit(1)
   if not response:
     break
 
-  io = StringIO()
-  json.dump(response, io)
+  audit.save_json('4_coins_sent.json', response)
 
-  # Record the message
-  with open(audit_directory + os.path.sep + '4_coins_sent.json', "w", 0700) as response_file:
-    response_file.write(io.getvalue())
-
-  r.send_message(message.author, 'CATE transaction sent (4)', io.getvalue())
+  r.send_message(message.author, 'CATE transaction sent (4)', json.dumps(response))
