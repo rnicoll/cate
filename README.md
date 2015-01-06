@@ -9,10 +9,9 @@ via reddit messages. It has been tested with Bitcoin and Dogecoin to this point,
 however it should work with any Bitcoin Core 0.9 derived client. These is a good
 discussion on the theory underlying this at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
 
-WARNING: Currently Bitcoin Core and Dogecoin Core DO NOT support transaction
-replacement, which is required for CATE to work properly. I'm going to look at
-what's holding back that support, however until it is in place DO NOT use CATE
-for main net transactions.
+NOTE: Currently Bitcoin Core and Dogecoin Core test networks DO NOT support
+transaction replacement, which is required for CATE to work properly. This does
+work on the respective main nets, and a patch is coming for the test networks.
 
 Please also note that CATE does not yet actually prompt the user to confirm
 the transaction suggested by the originating user.
@@ -26,7 +25,8 @@ the two.
 CATE requires python-bitcoinlib modified to support Dogecoin, which you can download from
 my Github at https://github.com/rnicoll/python-bitcoinlib/tree/master-dogecoin-keygen .
 A more permanent solution of an altcoin library wrapper around python-bitcoinlib is being
-worked on.
+worked on, which will include support for features such as AuxPoW which are not part
+of python-bitcoinlib.
 
 Lastly, CATE requires the "praw" library for accessing reddit. praw can be installed
 via "pip"
