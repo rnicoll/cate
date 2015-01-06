@@ -11,6 +11,7 @@ import bitcoin.core.scripteval
 import bitcoin.core.serialize
 
 from cate import *
+from cate.blockchain import *
 from cate.error import ConfigurationError
 from cate.fees import CFeeRate
 from cate.tx import *
@@ -30,16 +31,12 @@ def spend_tx3(tx3_id, trade_id):
   fee_rate = CFeeRate(config['daemons'][offer_currency_code]['fee_per_kb'])
 
   # Monitor the block chain for TX3 being relayed
-  try:
-    tx3 = proxy.getrawtransaction(tx3_id)
-  except IndexError as err:
-    # Transaction is not yet ready
-    print "Transaction is unavailable " + str(err)
-    return
+  statbuf = os.stat(audit.get_path('4_tx2.txt'))
+  print "Waiting for TX " + b2lx(tx3_id) + " to confirm"
+  tx3 = wait_for_tx_to_confirm(proxy, audit, tx3_id, statbuf.st_mtime)
 
-  # FIXME: Check TX3 has been confirmed
-
-  # TODO: Verify the secret we have matches the one expected
+  # TODO: Verify the secret we have matches the one expected; this is covered by
+  # verify script later, but good to check here too
 
   # Get an address to pull the funds into
   own_address = proxy.getnewaddress("CATE " + trade_id)

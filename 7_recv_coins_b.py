@@ -1,7 +1,6 @@
 import praw
 from bitcoin.base58 import decode
 import json
-import math
 import os.path
 import socket
 import sys
@@ -13,65 +12,40 @@ from bitcoin.core.script import *
 import bitcoin.core.scripteval
 import bitcoin.rpc
 from cate import *
-#from cate.error import ConfigurationError
+from cate.blockchain import *
 from cate.fees import CFeeRate
 from cate.tx import build_tx1_tx3_spend, extract_secret_from_vin
 
-def find_txin_matching_output(tx, vout):
+def find_secret_from_tx3_spend(proxy, audit,  tx3):
   """
-  Searches the given block for a transaction with the input provided
+  Gets the secret value from the transaction spending TX3
+  """
+  tx3_vout = COutPoint(tx3.GetHash(), 0)
 
-  Returns the TX if a match is found, or None otherwise
-  """
-  for inpoint in tx.vin:
-    prevout = inpoint.prevout
-    if prevout.hash == vout.hash and prevout.n == vout.n:
-      return inpoint
-  return None
+  # Scan the mempool first
+  for txid in proxy.getrawmempool():
+    tx = proxy.getrawtransaction(txid)
+    tx3_in = find_txin_matching_output(tx, tx3_vout)
+    if tx3_in:
+      return extract_secret_from_vin(tx, tx3_in)
 
-def find_tx_matching_output(block, vout):
-  """
-  Searches the given block for a transaction with the input provided
-  
-  Returns the TX if a match is found, or None otherwise
-  """
-  for tx in block.vtx:
-    txin = find_txin_matching_output(tx, vout)
-    if txin:
-      return tx
-  return None
-
-def get_first_block(proxy, audit):
-  """
-  Estimates the first block which could reasonably contain the transaction
-  spending TX3
-  
-  Returns a tuple of block height and the first block
-  """
+  # Scan the blockchain
   statbuf = os.stat(audit.get_path('5_tx4.txt'))
-  
-  blockchain_info = proxy.getblockchaininfo()
-  
-  # Figure out approximate block interval by grabbing the last block, and ten blocks ago
-  height = blockchain_info['blocks']
-  prev_height = max(0, height - 10)
-  block_top = proxy.getblock(lx(blockchain_info['bestblockhash']))
-  block_prev = proxy.getblock(proxy.getblockhash(prev_height))
+  (height, block) = get_first_block(proxy, statbuf.st_mtime)
+  height += 1
+  tx3_spend = find_tx_matching_output(block, tx3_vout)
+  while not tx3_spend:
+    try:
+      block = proxy.getblock(proxy.getblockhash(height))
+      height += 1
+    except IndexError as err:
+      time.sleep(5)
+      continue
+    tx3_spend = find_tx_matching_output(block, tx3_vout)
 
-  block_time = (block_top.nTime - block_prev.nTime) / (height - prev_height)
-  if block_top.nTime > statbuf.st_mtime:
-    blocks_to_go_back = min(height, int(math.ceil((block_top.nTime - statbuf.st_mtime) / block_time)))
-  else:
-    # No blocks since the transaction completed, so we start at the top of the chain
-    blocks_to_go_back = 0
-  first_height = height - blocks_to_go_back
+  tx3_in = find_txin_matching_output(tx3_spend, tx3_vout)
 
-  first_block = proxy.getblock(proxy.getblockhash(first_height))
-  while first_block.nTime > statbuf.st_mtime:
-    first_height -= 1
-    first_block = proxy.getblock(proxy.getblockhash(first_height))
-
-  return (first_height, first_block)
+  return extract_secret_from_vin(tx3_spend, tx3_in)
 
 def spend_tx1(tx1_id, trade_id):
   print "Spending coins from trade " + trade_id
@@ -86,23 +60,8 @@ def spend_tx1(tx1_id, trade_id):
   # Connect to the wallet we've sent coins to
   bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
-
-  # Monitor the other block chain for a transaction spending the outputs from TX3
-  (height, block) = get_first_block(proxy, audit)
-  height += 1
-  tx3_vout = COutPoint(tx3.GetHash(), 0)
-  tx3_spend = find_tx_matching_output(block, tx3_vout)
-  while not tx3_spend:
-    try:
-      block = proxy.getblock(proxy.getblockhash(height))
-      height += 1
-    except IndexError as err:
-      time.sleep(5)
-      continue
-    tx3_spend = find_tx_matching_output(block, tx3_vout)
-
-  tx3_in = find_txin_matching_output(tx3_spend, tx3_vout)
-  secret = extract_secret_from_vin(tx3_spend, tx3_in)
+  print "Waiting for TX spending " + b2lx(tx3.GetHash())
+  secret = find_secret_from_tx3_spend(proxy, audit, tx3)
 
   # Connect to the wallet we're receiving coins from
   bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)

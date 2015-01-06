@@ -11,6 +11,7 @@ from bitcoin.core.script import *
 import bitcoin.core.scripteval
 import bitcoin.rpc
 from cate import *
+from cate.blockchain import *
 from cate.error import ConfigurationError, MessageError, TradeError
 from cate.tx import *
 
@@ -39,22 +40,18 @@ def process_offer_confirmed(send_notification, audit):
   acceptance = audit.load_json('3_acceptance.json')
   confirmation = audit.load_json('3_confirmation.json')
 
+  ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
-  offer_currency_quantity = offer['offer_currency_quantity']
   private_key_b = audit.load_private_key('1_private_key.txt')
   public_key_a = bitcoin.core.key.CPubKey(x(acceptance['public_key_a']))
   public_key_b = bitcoin.core.key.CPubKey(private_key_b._cec_key.get_pubkey())
   secret_hash = x(acceptance['secret_hash'])
 
-  # Connect to the daemon
-  # TODO: Check the configuration exists
-  bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
-
+  tx2 = CTransaction.deserialize(x(acceptance['tx2']))
   tx3 = audit.load_tx('3_tx3.txt')
   tx4 = CMutableTransaction.from_tx(CTransaction.deserialize(x(confirmation['tx4'])))
 
-  # Apply signatures to TX2 and check the result is valid
+  # Apply signatures to TX4 and check the result is valid
   txin_scriptPubKey = tx3.vout[0].scriptPubKey
   sighash = SignatureHash(txin_scriptPubKey, tx4, 0, SIGHASH_ALL)
   tx4_sig_a = x(send_notification['tx4_sig'])
@@ -66,6 +63,16 @@ def process_offer_confirmed(send_notification, audit):
   bitcoin.core.scripteval.VerifyScript(tx4.vin[0].scriptSig, txin_scriptPubKey, tx4, 0, (SCRIPT_VERIFY_P2SH,))
   audit.save_tx('5_tx4.txt', tx4)
 
+  # Check TX1 has been confirmed
+  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
+  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
+  statbuf = os.stat(audit.get_path('3_tx3.txt'))
+  print "Waiting for TX " + b2lx(tx2.vin[0].prevout.hash) + " to confirm"
+  wait_for_tx_to_confirm(proxy, audit, tx2.vin[0].prevout.hash, statbuf.st_mtime)
+
+  # Relay TX3
+  bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
+  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
   proxy.sendrawtransaction(tx3)
 
   return True
