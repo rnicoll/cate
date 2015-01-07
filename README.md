@@ -9,12 +9,29 @@ via reddit messages. It has been tested with Bitcoin and Dogecoin to this point,
 however it should work with any Bitcoin Core 0.9 derived client. These is a good
 discussion on the theory underlying this at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
 
-NOTE: Currently Bitcoin Core and Dogecoin Core test networks DO NOT support
-transaction replacement, which is required for CATE to work properly. This does
-work on the respective main nets, and a patch is coming for the test networks.
-
 Please also note that CATE does not yet actually prompt the user to confirm
 the transaction suggested by the originating user.
+
+Known Issues
+============
+
+Python-bitcoinlib does not support AuxPoW blocks, which makes transaction verification
+on the Dogecoin blockchain extremely inefficient. Currently this is disabled, which
+would be a security risk if it wasn't that you can't use this on live networks. AuxPoW
+support is coming, at which point validation of the transactions being relayed will
+be re-enabled. Until then, DO NOT use this on main net.
+
+Transaction malleability is a risk for this application, in that the refund transactions
+are written before their input transactions are confirmed. This means in the transactions
+they take inputs from are modified after being relayed, the refund transactions will be
+useless. In general this risk is considered minor; transaction malleability does not
+allow someone to steal coins, and the trade can still complete successfully even if the
+send transactions are modified after being relayed. When BIP62 is introduced on the main
+networks it will further reduce this risk.
+
+Currently Bitcoin Core and Dogecoin Core test networks DO NOT support
+transaction replacement, which is required for CATE to work properly. This does
+work on the respective main nets, and a patch is coming for the test networks.
 
 Requirements
 ============
