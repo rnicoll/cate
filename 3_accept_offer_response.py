@@ -32,7 +32,7 @@ def assert_acceptance_valid(acceptance):
 def process_offer_accepted(acceptance, audit):
   trade_id = acceptance['trade_id']
   secret_hash = x(acceptance['secret_hash'])
-  tx2 = CTransaction.deserialize(x(acceptance['tx2']))
+  peer_refund_tx = CTransaction.deserialize(x(acceptance['tx2']))
 
   # Load the offer sent
   offer = audit.load_json('1_offer.json')
@@ -49,24 +49,24 @@ def process_offer_accepted(acceptance, audit):
   private_key_b = audit.load_private_key('1_private_key.txt')
   public_key_b = bitcoin.core.key.CPubKey(x(offer['public_key_b']))
 
-  assert_tx2_valid(tx2)
-  tx2_sig = get_tx2_signature(proxy, tx2, private_key_b, public_key_a, public_key_b, secret_hash)
+  assert_refund_tx_valid(peer_refund_tx)
+  peer_refund_tx_sig = get_recovery_tx_sig(peer_refund_tx, private_key_b, public_key_a, public_key_b, secret_hash)
 
   # Generate TX3 & TX4, which are essentially the same as TX1 & TX2 except
   # that ask/offer details are reversed
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
-  lock_time = calendar.timegm(lock_datetime.timetuple())
+  nLockTime = calendar.timegm(lock_datetime.timetuple())
   own_address = proxy.getnewaddress("CATE refund " + trade_id)
-  tx3 = build_tx3(proxy, offer_currency_quantity, public_key_a, public_key_b, secret_hash, fee_rate)
-  tx4 = build_unsigned_tx4(proxy, tx3, own_address, lock_time, fee_rate)
+  tx3 = build_send_transaction(proxy, offer_currency_quantity, public_key_b, public_key_a, secret_hash, fee_rate)
+  own_refund_tx = build_unsigned_refund_tx(proxy, tx3, own_address, nLockTime, fee_rate)
 
   #     Write TX3 to audit directory as we don't send it yet
   audit.save_tx('3_tx3.txt', tx3)
 
   return {
     'trade_id': trade_id,
-    'tx2_sig': b2x(tx2_sig),
-    'tx4': b2x(tx4.serialize())
+    'tx2_sig': b2x(peer_refund_tx_sig),
+    'tx4': b2x(own_refund_tx.serialize())
   }
 
 try:

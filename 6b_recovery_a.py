@@ -13,7 +13,6 @@ import bitcoin.core.serialize
 from cate import *
 from cate.error import ConfigurationError
 from cate.fees import CFeeRate
-from cate.tx import *
 
 # Scan for transactions where TX1 has been sent to the network,
 # but not yet spent, and should be recovered using TX2

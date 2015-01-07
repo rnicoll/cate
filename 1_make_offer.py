@@ -99,5 +99,5 @@ audit.save_json('1_offer.json', trade)
 
 r.send_message(target_redditor, 'CATE transaction offer (1)', json.dumps(trade))
 
-print "Offer sent"
+print "Trade offer " + trade_id + " sent"
 

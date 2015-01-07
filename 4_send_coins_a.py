@@ -10,7 +10,11 @@ import bitcoin.rpc
 import bitcoin.core.scripteval
 from cate import *
 from cate.error import ConfigurationError, MessageError, TradeError
+from cate.script import *
 from cate.tx import *
+
+# Peer 'A' completes the refund transaction using the signature from 'B', then
+# relays the first send transaction.
 
 def assert_confirmation_valid(confirmation):
   if 'trade_id' not in confirmation:
@@ -47,31 +51,33 @@ def process_offer_confirmed(confirmation, audit):
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
 
   tx1 = audit.load_tx('2_tx1.txt')
-  tx2 = CMutableTransaction.from_tx(CTransaction.deserialize(x(acceptance['tx2'])))
-  tx4 = CTransaction.deserialize(x(confirmation['tx4']))
+  own_refund_tx = CMutableTransaction.from_tx(CTransaction.deserialize(x(acceptance['tx2'])))
+  peer_refund = CTransaction.deserialize(x(confirmation['tx4']))
 
   # Apply signatures to TX2 and check the result is valid
   txin_scriptPubKey = tx1.vout[0].scriptPubKey
-  sighash = SignatureHash(txin_scriptPubKey, tx2, 0, SIGHASH_ALL)
-  tx2_sig_a = private_key_a.sign(sighash) + (b'\x01') # Append signature hash type
-  tx2_sig_b = x(confirmation['tx2_sig'])
-  if not public_key_b.verify(sighash, tx2_sig_b):
-    raise TradeError("Signature from peer for TX2 is invalid.")
+  sighash = SignatureHash(txin_scriptPubKey, own_refund_tx, 0, SIGHASH_ALL)
+  own_refund_tx_sig_a = get_recovery_tx_sig(own_refund_tx, private_key_a, public_key_a, public_key_b, secret_hash)
+  if not public_key_a.verify(sighash, own_refund_tx_sig_a):
+    raise TradeError("Own signature for refund transaction is invalid.")
+  own_refund_tx_sig_b = x(confirmation['tx2_sig'])
+  if not public_key_b.verify(sighash, own_refund_tx_sig_b):
+    raise TradeError("Signature from peer for refund transaction is invalid.")
 
-  tx2.vin[0].scriptSig = CScript([tx2_sig_a, public_key_a, 1, tx2_sig_b, public_key_b])
-  bitcoin.core.scripteval.VerifyScript(tx2.vin[0].scriptSig, txin_scriptPubKey, tx2, 0, (SCRIPT_VERIFY_P2SH,))
-  audit.save_tx('4_tx2.txt', tx2)
+  own_refund_tx.vin[0].scriptSig = build_recovery_in_script(own_refund_tx_sig_b, public_key_b, own_refund_tx_sig_a, public_key_a)
+  bitcoin.core.scripteval.VerifyScript(own_refund_tx.vin[0].scriptSig, txin_scriptPubKey, own_refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+  audit.save_tx('4_tx2.txt', own_refund_tx)
 
   # Verify the TX4 returned by the peer, then sign it
-  assert_tx2_valid(tx4)
-  tx4_sig = get_tx4_signature(proxy, tx4, private_key_a, public_key_a, public_key_b, secret_hash)
+  assert_refund_tx_valid(peer_refund)
+  peer_refund_tx_sig_a = get_recovery_tx_sig(peer_refund, private_key_a, public_key_b, public_key_a, secret_hash)
 
   proxy.sendrawtransaction(tx1)
 
   # Pass back the signature
   return {
     'trade_id': trade_id,
-    'tx4_sig': b2x(tx4_sig)
+    'tx4_sig': b2x(peer_refund_tx_sig_a)
   }
 
 try:

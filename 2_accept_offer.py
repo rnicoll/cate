@@ -121,20 +121,20 @@ def process_offer(offer, audit):
 
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
-  lock_time = calendar.timegm(lock_datetime.timetuple())
+  nLockTime = calendar.timegm(lock_datetime.timetuple())
   own_address = proxy.getnewaddress("CATE refund " + trade_id)
-  tx1 = build_tx1(proxy, ask_currency_quantity, public_key_a, public_key_b, secret_hash, fee_rate)
-  tx2 = build_unsigned_tx2(proxy, tx1, own_address, lock_time, fee_rate)
+  send_tx = build_send_transaction(proxy, ask_currency_quantity, public_key_a, public_key_b, secret_hash, fee_rate)
+  refund_tx = build_unsigned_refund_tx(proxy, send_tx, own_address, nLockTime, fee_rate)
 
   #     Write TX1 to the audit directory as it's not sent to the peer
-  audit.save_tx('2_tx1.txt', tx1)
+  audit.save_tx('2_tx1.txt', send_tx)
 
   #	Send TX2 to remote user along with our address
   return {
     'trade_id': trade_id,
     'secret_hash': b2x(secret_hash),
     'public_key_a': b2x(public_key_a),
-    'tx2': b2x(tx2.serialize())
+    'tx2': b2x(refund_tx.serialize())
   }
 
 try:

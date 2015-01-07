@@ -1,5 +1,4 @@
 import praw
-import hashlib
 import json
 import os.path
 import socket
@@ -10,13 +9,16 @@ from bitcoin.core import *
 from bitcoin.core.script import *
 import bitcoin.core.scripteval
 import bitcoin.rpc
+
 from cate import *
 from cate.blockchain import *
 from cate.error import ConfigurationError, MessageError, TradeError
+from cate.script import *
 from cate.tx import *
 
-# 'B' receives the completed TX4 from 'A', verifies the signatures on it
-# are valid, then submits TX3 to the network
+# Peer 'B' receives the completed refund transaction from 'A', verifies the
+# signatures on it are valid, verifies 'A' has sent the coins it agreed to
+# then relays the transaction containing its own coins to the network
 
 def assert_send_notification_valid(send_notification):
   if 'trade_id' not in send_notification:
@@ -24,18 +26,9 @@ def assert_send_notification_valid(send_notification):
   if send_notification['trade_id'].find(os.path.sep) != -1:
     raise MessageError("Invalid trade ID received; trade must not contain path separators")
   if 'tx4_sig' not in send_notification:
-    raise MessageError( "Missing TX4 signature from confirmed offer.")
+    raise MessageError( "Missing refund transaction signature from confirmed offer.")
 
 def process_offer_confirmed(send_notification, audit):
-  """
-  1. Receives the completed TX2 and the partial TX4 from 'B'.
-  2. Verifies the signatures on TX2 are valid
-  3. Verifies the lock time on TX4 is valid
-  4. Signs TX4 to complete it
-  5. Returns TX4 to 'B'
-  6. Submits TX1 to the network
-  """
-
   offer = audit.load_json('1_offer.json')
   acceptance = audit.load_json('3_acceptance.json')
   confirmation = audit.load_json('3_confirmation.json')
@@ -47,33 +40,38 @@ def process_offer_confirmed(send_notification, audit):
   public_key_b = bitcoin.core.key.CPubKey(private_key_b._cec_key.get_pubkey())
   secret_hash = x(acceptance['secret_hash'])
 
-  tx2 = CTransaction.deserialize(x(acceptance['tx2']))
-  tx3 = audit.load_tx('3_tx3.txt')
-  tx4 = CMutableTransaction.from_tx(CTransaction.deserialize(x(confirmation['tx4'])))
+  peer_refund_tx = CTransaction.deserialize(x(acceptance['tx2']))
+  own_send_tx = audit.load_tx('3_tx3.txt')
+  own_refund_tx = CMutableTransaction.from_tx(CTransaction.deserialize(x(confirmation['tx4'])))
 
   # Apply signatures to TX4 and check the result is valid
-  txin_scriptPubKey = tx3.vout[0].scriptPubKey
-  sighash = SignatureHash(txin_scriptPubKey, tx4, 0, SIGHASH_ALL)
-  tx4_sig_a = x(send_notification['tx4_sig'])
-  tx4_sig_b = private_key_b.sign(sighash) + (b'\x01') # Append signature hash type
-  if not public_key_a.verify(sighash, tx4_sig_a):
+  txin_scriptPubKey = own_send_tx.vout[0].scriptPubKey
+  sighash = SignatureHash(txin_scriptPubKey, own_refund_tx, 0, SIGHASH_ALL)
+  own_refund_tx_sig_a = x(send_notification['tx4_sig'])
+  if not public_key_a.verify(sighash, own_refund_tx_sig_a):
+    raise TradeError("Own signature for recovery transaction is invalid.")
+  own_refund_tx_sig_b = get_recovery_tx_sig(own_refund_tx, private_key_b, public_key_b, public_key_a, secret_hash)
+  if not public_key_b.verify(sighash, own_refund_tx_sig_b):
     raise TradeError("Signature from peer for TX4 is invalid.")
 
-  tx4.vin[0].scriptSig = CScript([tx4_sig_b, public_key_b, 1, tx4_sig_a, public_key_a])
-  bitcoin.core.scripteval.VerifyScript(tx4.vin[0].scriptSig, txin_scriptPubKey, tx4, 0, (SCRIPT_VERIFY_P2SH,))
-  audit.save_tx('5_tx4.txt', tx4)
+  own_refund_tx.vin[0].scriptSig = build_recovery_in_script(own_refund_tx_sig_a, public_key_a, own_refund_tx_sig_b, public_key_b)
+  bitcoin.core.scripteval.VerifyScript(own_refund_tx.vin[0].scriptSig, txin_scriptPubKey, own_refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+  audit.save_tx('5_tx4.txt', own_refund_tx)
 
   # Check TX1 has been confirmed
   bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
   statbuf = os.stat(audit.get_path('3_tx3.txt'))
-  print "Waiting for TX " + b2lx(tx2.vin[0].prevout.hash) + " to confirm"
-  wait_for_tx_to_confirm(proxy, audit, tx2.vin[0].prevout.hash, statbuf.st_mtime)
+  print "Waiting for TX " + b2lx(peer_refund_tx.vin[0].prevout.hash) + " to confirm"
+  # FIXME: Doesn't work on AuxPoW block chains
+  # peer_send_tx = wait_for_tx_to_confirm(proxy, audit, peer_refund_tx.vin[0].prevout.hash, statbuf.st_mtime)
 
-  # Relay TX3
+  # FIXME: Verify outputs of the peer's transaction contain the correct script, and number of coins
+
+  # Relay our own send transaction
   bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
   proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
-  proxy.sendrawtransaction(tx3)
+  proxy.sendrawtransaction(own_send_tx)
 
   return True
 

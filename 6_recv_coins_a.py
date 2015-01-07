@@ -16,7 +16,11 @@ from cate.error import ConfigurationError
 from cate.fees import CFeeRate
 from cate.tx import *
 
-def spend_tx3(tx3_id, trade_id):
+def spend_peer_send_tx(peer_send_tx_id, trade_id):
+  """
+  Spends the coins from the trade sent the remote peer, to an address we control.
+  """
+
   print "Spending coins from trade " + trade_id
   audit = TradeDao(trade_id)
 
@@ -32,8 +36,8 @@ def spend_tx3(tx3_id, trade_id):
 
   # Monitor the block chain for TX3 being relayed
   statbuf = os.stat(audit.get_path('4_tx2.txt'))
-  print "Waiting for TX " + b2lx(tx3_id) + " to confirm"
-  tx3 = wait_for_tx_to_confirm(proxy, audit, tx3_id, statbuf.st_mtime)
+  print "Waiting for TX " + b2lx(peer_send_tx_id) + " to confirm"
+  peer_send_tx = wait_for_tx_to_confirm(proxy, audit, peer_send_tx_id, statbuf.st_mtime)
 
   # TODO: Verify the secret we have matches the one expected; this is covered by
   # verify script later, but good to check here too
@@ -42,21 +46,21 @@ def spend_tx3(tx3_id, trade_id):
   own_address = proxy.getnewaddress("CATE " + trade_id)
 
   # Create a new transaction spending TX3, using the secret and our private key
-  tx3_spend = build_tx1_tx3_spend(proxy, tx3, private_key_a, secret, own_address, fee_rate)
+  own_receive_tx = build_receive_tx(proxy, peer_send_tx, private_key_a, secret, own_address, fee_rate)
 
   # Send the transaction to the blockchain
-  bitcoin.core.scripteval.VerifyScript(tx3_spend.vin[0].scriptSig, tx3.vout[0].scriptPubKey, tx3_spend, 0, (SCRIPT_VERIFY_P2SH,))
+  bitcoin.core.scripteval.VerifyScript(own_receive_tx.vin[0].scriptSig, peer_send_tx.vout[0].scriptPubKey, own_receive_tx, 0, (SCRIPT_VERIFY_P2SH,))
   try:
-    proxy.sendrawtransaction(tx3_spend)
+    proxy.sendrawtransaction(own_receive_tx)
   except bitcoin.rpc.JSONRPCException as err:
     if err.error['code'] == -25:
-      print "TX3 for trade " + trade_id + " has already been spent"
+      print "Send transaction " + b2lx(peer_send_tx_id) + " for trade " + trade_id + " has already been spent"
     else:
       raise err
-  ready_transactions.pop(tx3_id, None)
+  ready_transactions.pop(peer_send_tx_id, None)
 
   # Add a file to indicate the TX is complete
-  audit.save_text('6_complete.txt', b2lx(tx3_spend.GetHash()))
+  audit.save_text('6_complete.txt', b2lx(own_receive_tx.GetHash()))
 
 # This is where both coins have been sent to the blockchains and 'A'
 # can now use the secret to spend the coins sent by 'B'
@@ -82,9 +86,9 @@ for trade_id in os.listdir('audits'):
   ready_transactions[tx4.vin[0].prevout.hash] = trade_id
 
 while ready_transactions:
-  tx3ids = ready_transactions.keys()
-  for tx3_id in tx3ids:
-    trade_id = ready_transactions[tx3_id]
-    spend_tx3(tx3_id, trade_id)
+  send_tx_ids = ready_transactions.keys()
+  for send_tx_id in send_tx_ids:
+    trade_id = ready_transactions[send_tx_id]
+    spend_peer_send_tx(send_tx_id, trade_id)
   if ready_transactions:
     time.sleep(5)

@@ -3,34 +3,35 @@ import datetime
 import os.path
 import sys
 
-import error
-
 from bitcoin.core import *
 from bitcoin.core.script import *
 import bitcoin.core.serialize
 
-def assert_tx2_valid(tx2):
+import error
+import script
+
+def assert_refund_tx_valid(refund_tx):
   """
-  Checks the TX2 provided by the remote peer matches the expected structure.
+  Checks the refund TX provided by the remote peer matches the expected structure.
   Raises an exception in case of a problem
   """
 
   lock_min_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=12)
   lock_max_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=72)
-  lock_time = tx2.nLockTime
+  lock_time = refund_tx.nLockTime
   if lock_time < calendar.timegm(lock_min_datetime.timetuple()):
-    raise error.TradeError("TX2 lock time is "
+    raise error.TradeError("Refund TX lock time is "
       + datetime.datetime.utcfromtimestamp(lock_time).strftime('%Y-%m-%d %H:%M:%S')
       + " which is less than 24 hours in the future.")
   if lock_time > calendar.timegm(lock_max_datetime.timetuple()):
-    raise error.TradeError("TX2 lock time is "
+    raise error.TradeError("Refund TX lock time is "
       + datetime.datetime.utcfromtimestamp(lock_time).strftime('%Y-%m-%d %H:%M:%S')
       + " which is more than 72 hours in the future.")
 
-  if len(tx2.vin) != 1:
-    raise error.TradeError("TX2 does not have exactly one input.")
-  if len(tx2.vout) != 1:
-    raise error.TradeError("TX2 does not exactly one output.")
+  if len(refund_tx.vin) != 1:
+    raise error.TradeError("Refund TX does not have exactly one input.")
+  if len(refund_tx.vout) != 1:
+    raise error.TradeError("Refund TX does not exactly one output.")
 
   # TODO: Check the output value is close to the trade total (i.e. about right
   # after fees have been deducted
@@ -38,8 +39,8 @@ def assert_tx2_valid(tx2):
   # If the nSequence is 0xffffffff, the transaction can be considered valid
   # despite what the lock time says. Current implementations do not support this,
   # however we want to be sure anyway
-  if tx2.vin[0].nSequence == 0xffffffff:
-    raise error.TradeError("TX2 input's sequence is final; must be less than MAX_INT.")
+  if refund_tx.vin[0].nSequence == 0xffffffff:
+    raise error.TradeError("Refund TX input's sequence is final; must be less than MAX_INT.")
 
 def find_inputs(proxy, quantity):
   """ Find unspent outputs equal to or greater than the given target
@@ -65,57 +66,7 @@ def find_inputs(proxy, quantity):
 
   return (txins, total_in)
 
-def extract_secret_from_vin(tx, vin):
-  """
-  Searches for the secret from the scriptSig of the given input
-  """
-  # Extract the secret from the transaction output script
-  sig_elements = []
-  for sig_element in vin.scriptSig:
-    sig_elements.append(sig_element)
-  if len(sig_elements) < 3:
-    raise TradeError("Cannot extract shared secret from scriptSig of transaction " + b2x(tx.GetHash()))
-  public_key_a = sig_elements.pop()
-  sig_a = sig_elements.pop()
-  tx_type = sig_elements.pop()
-
-  # TODO: Should verify the public key and signature are as expected
-  if tx_type == 0:
-    # If the transaction was refunded back to its sender, rather than spent
-    raise TradeError("Signatures on transaction " + b2x(tx.GetHash()) + " are from the refund TX, not the spending TX.")
-
-  return sig_elements.pop()
-
-def build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash, is_tx1):
-  """
-  Generates the script for TX1/TX3's main output (i.e. not the change output)
-  """
-
-  if is_tx1:
-    peer_public_key = public_key_b
-    own_public_key = public_key_a
-  else:
-    peer_public_key = public_key_a
-    own_public_key = public_key_b
-
-  # scriptSig is either:
-  #     <peer signature> <peer public key hash> 0 <own signature> <own public key hash>
-  # or
-  #     <peer signature> <peer public key hash> 1 <shared secret>
-  return CScript(
-    [
-      OP_DUP, OP_HASH160, bitcoin.core.Hash160(peer_public_key), OP_EQUALVERIFY, OP_CHECKSIGVERIFY,
-      OP_IF,
-        # Top of stack is not zero, script matches a pair of signatures
-        OP_DUP, OP_HASH160, bitcoin.core.Hash160(own_public_key), OP_EQUALVERIFY, OP_CHECKSIG,
-      OP_ELSE,
-        # Secret and single signature
-        OP_HASH256, secret_hash, OP_EQUAL,
-      OP_ENDIF
-    ]
-  )
-
-def build_tx1_tx3(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_rate, is_tx1):
+def build_send_transaction(proxy, quantity, sender_public_key, recipient_public_key, secret_hash, fee_rate):
   """
   Generates "TX1" from the guide at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
   Pay w BTC to <B's public key> if (x for H(x) known and signed by B) or (signed by A & B)
@@ -133,8 +84,7 @@ def build_tx1_tx3(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_
   quantity_inc_fee = quantity + fee_rate.get_fee(1000)
   (txins, total_in) = find_inputs(proxy, quantity_inc_fee)
 
-  txout = CTxOut(quantity, build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash, is_tx1))
-  txouts = [txout]
+  txouts = [CTxOut(quantity, script.build_send_out_script(sender_public_key, recipient_public_key, secret_hash))]
 
   # Generate a change transaction if needed
   if total_in > quantity_inc_fee:
@@ -152,12 +102,7 @@ def build_tx1_tx3(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_
 
   return tx_signed['tx']
 
-def build_tx1(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_rate):
-  return build_tx1_tx3(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_rate, True)
-def build_tx3(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_rate):
-  return build_tx1_tx3(proxy, quantity, public_key_a, public_key_b, secret_hash, fee_rate, False)
-
-def build_unsigned_tx2_tx4(proxy, tx1, own_address, nLockTime, fee_rate, is_tx2):
+def build_unsigned_refund_tx(proxy, send_tx, own_address, nLockTime, fee_rate):
   """
   Generates "TX2" from the guide at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading.
   The same code can also generate TX4. These are the refund transactions in case of
@@ -165,15 +110,15 @@ def build_unsigned_tx2_tx4(proxy, tx1, own_address, nLockTime, fee_rate, is_tx2)
         Pay w BTC from TX1 to <A's public key>, locked 48 hours in the future, signed by A
 
   proxy is the RPC proxy to the relevant daemon JSON-RPC interface
-  tx1 the (complete, signed) transaction to refund from
+  send_tx the (complete, signed) transaction to refund from
   nLockTime the lock time to set on the transaction
   own_address is the private address this client signs the refund transaction with. This must match
       the address provided when generating TX1.
 
   returns a CMutableTransaction
   """
-  prev_txid = tx1.GetHash()
-  prev_out = tx1.vout[0]
+  prev_txid = send_tx.GetHash()
+  prev_out = send_tx.vout[0]
   txin = CMutableTxIn(COutPoint(prev_txid, 0), nSequence=1)
 
   txin_scriptPubKey = prev_out.scriptPubKey
@@ -184,22 +129,16 @@ def build_unsigned_tx2_tx4(proxy, tx1, own_address, nLockTime, fee_rate, is_tx2)
   # Create the unsigned transaction
   return CMutableTransaction([txin], txouts, nLockTime)
 
-def build_unsigned_tx2(proxy, tx1, own_address, nLockTime, fee_rate):
-  return build_unsigned_tx2_tx4(proxy, tx1, own_address, nLockTime, fee_rate, True)
-
-def build_unsigned_tx4(proxy, tx3, own_address, nLockTime, fee_rate):
-  return build_unsigned_tx2_tx4(proxy, tx3, own_address, nLockTime, fee_rate, False)
-
 """
-Generate the spending transaction for TX1/TX3
+Generate the spending transaction for the send TX from the peer
 
 seckey is the secret key used to sign the transaction
 """
-def build_tx1_tx3_spend(proxy, tx1, private_key, secret, own_address, fee_rate):
+def build_receive_tx(proxy, send_tx, recipient_seckey, secret, own_address, fee_rate):
   fee = fee_rate.get_fee(1000)
 
-  prev_txid = tx1.GetHash()
-  prev_out = tx1.vout[0]
+  prev_txid = send_tx.GetHash()
+  prev_out = send_tx.vout[0]
   txin = CMutableTxIn(COutPoint(prev_txid, 0), nSequence=1)
   txins = [txin]
 
@@ -213,30 +152,26 @@ def build_tx1_tx3_spend(proxy, tx1, private_key, secret, own_address, fee_rate):
   # Calculate the signature hash for that transaction.
   sighash = SignatureHash(txin_scriptPubKey, tx, 0, SIGHASH_ALL)
 
-  # Now sign it. We have to append the type of signature we want to the end, in
-  # this case the usual SIGHASH_ALL.
-  sig = private_key.sign(sighash) + (b'\x01') # bytes([SIGHASH_ALL])
-
   # scriptSig needs to be:
   #     <shared secret> 0 <signature> <public key>
-  txin.scriptSig = CScript([secret, 0, sig, private_key.pub])
+  txin.scriptSig = script.build_recv_in_script(recipient_seckey, secret, sighash)
 
   return tx
 
-def get_tx2_tx4_signature(proxy, tx2, own_private_key, public_key_a, public_key_b, secret_hash, is_tx2):
-  # Rebuild the input script for TX1
-  # Note the inputs are reversed because we're creating it from the peer's point of view
-  txin_scriptPubKey = build_tx1_tx3_cscript(public_key_a, public_key_b, secret_hash, is_tx2)
+def get_recovery_tx_sig(recovery_tx, own_seckey, recipient_public_key, other_public_key, secret_hash):
+  """
+  Generate a signature for the recovery transaction input from the send transaction.
+
+  recipient_public_key is the public key of the peer who receives the coins
+  other_public_key is the public key of the peer who confirms the transaction but does not receive any coins
+  """
+  # Rebuild the input script for the send transaction
+  txin_scriptPubKey = script.build_send_out_script(recipient_public_key, other_public_key, secret_hash)
 
   # Calculate the signature hash for the transaction.
-  sighash = SignatureHash(txin_scriptPubKey, tx2, 0, SIGHASH_ALL)
+  sighash = SignatureHash(txin_scriptPubKey, recovery_tx, 0, SIGHASH_ALL)
 
   # Now sign it. We have to append the type of signature we want to the end, in
   # this case the usual SIGHASH_ALL. For some reason appending bytes gives us
   # nonsense, so for now manually stuffing 0x01 on the end
-  return own_private_key.sign(sighash) + (b'\x01') # bytes([SIGHASH_ALL])
-
-def get_tx2_signature(proxy, tx2, own_private_key, public_key_a, public_key_b, secret_hash):
-  return get_tx2_tx4_signature(proxy, tx2, own_private_key, public_key_a, public_key_b, secret_hash, True)
-def get_tx4_signature(proxy, tx2, own_private_key, public_key_a, public_key_b, secret_hash):
-  return get_tx2_tx4_signature(proxy, tx2, own_private_key, public_key_a, public_key_b, secret_hash, False)
+  return own_seckey.sign(sighash) + (b'\x01') # bytes([SIGHASH_ALL])
