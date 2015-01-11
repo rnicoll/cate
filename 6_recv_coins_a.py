@@ -4,11 +4,10 @@ import socket
 import sys
 import time
 
-from bitcoin import SelectParams
-import bitcoin.rpc
-from bitcoin.core import *
+from altcoin import SelectParams
+import altcoin.rpc
 import bitcoin.core.scripteval
-import bitcoin.core.serialize
+import bitcoin.rpc
 
 from cate import *
 from cate.blockchain import *
@@ -30,8 +29,8 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
   secret = audit.load_secret('2_secret.txt')
 
   # Connect to the wallet
-  bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
+  altcoin.SelectParams(offer['offer_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
   fee_rate = CFeeRate(config['daemons'][offer_currency_code]['fee_per_kb'])
 
   # Monitor the block chain for TX3 being relayed

@@ -5,10 +5,9 @@ import socket
 import sys
 import time
 
-from bitcoin import SelectParams
+from altcoin import SelectParams
+import altcoin.rpc
 import bitcoin.rpc
-from bitcoin.core import *
-import bitcoin.core.serialize
 
 from cate import *
 from cate.error import ConfigurationError
@@ -40,8 +39,8 @@ for trade_id in os.listdir('audits'):
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
 
   # Connect to the wallet
-  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
+  altcoin.SelectParams(offer['ask_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
 
   try:
     proxy.sendrawtransaction(tx2)

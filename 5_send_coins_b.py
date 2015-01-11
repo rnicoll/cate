@@ -4,11 +4,9 @@ import os.path
 import socket
 import sys
 
-from bitcoin import SelectParams
-from bitcoin.core import *
-from bitcoin.core.script import *
+from altcoin import SelectParams
+import altcoin.rpc
 import bitcoin.core.scripteval
-import bitcoin.rpc
 
 from cate import *
 from cate.blockchain import *
@@ -59,18 +57,17 @@ def process_offer_confirmed(send_notification, audit):
   audit.save_tx('5_tx4.txt', own_refund_tx)
 
   # Check TX1 has been confirmed
-  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
+  altcoin.SelectParams(offer['ask_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
   statbuf = os.stat(audit.get_path('3_tx3.txt'))
   print "Waiting for TX " + b2lx(peer_refund_tx.vin[0].prevout.hash) + " to confirm"
-  # FIXME: Doesn't work on AuxPoW block chains
-  # peer_send_tx = wait_for_tx_to_confirm(proxy, audit, peer_refund_tx.vin[0].prevout.hash, statbuf.st_mtime)
+  peer_send_tx = wait_for_tx_to_confirm(proxy, audit, peer_refund_tx.vin[0].prevout.hash, statbuf.st_mtime)
 
   # FIXME: Verify outputs of the peer's transaction contain the correct script, and number of coins
 
   # Relay our own send transaction
-  bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
+  altcoin.SelectParams(offer['offer_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
   proxy.sendrawtransaction(own_send_tx)
 
   return True

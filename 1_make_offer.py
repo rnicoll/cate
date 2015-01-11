@@ -5,9 +5,8 @@ import yaml
 import sys
 import uuid
 
-import bitcoin
-from bitcoin.wallet import CBitcoinSecret, P2PKHBitcoinAddress
-import bitcoin.rpc
+from altcoin.core.key import CAltcoinECKey
+
 from cate import *
 from cate.error import ConfigurationError
 
@@ -89,7 +88,7 @@ while target_redditor == None:
 
 # Generate a key pair to be used to sign transactions. We generate the key
 # directly rather than via a wallet as it's used on both chains.
-cec_key = bitcoin.core.key.CECKey()
+cec_key = CAltcoinECKey()
 cec_key.generate()
 cec_key.set_compressed(True)
 audit.save_private_key('1_private_key.txt', cec_key.get_secretbytes())
@@ -100,4 +99,3 @@ audit.save_json('1_offer.json', trade)
 r.send_message(target_redditor, 'CATE transaction offer (1)', json.dumps(trade))
 
 print "Trade offer " + trade_id + " sent"
-

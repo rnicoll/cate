@@ -6,11 +6,11 @@ import socket
 import sys
 import time
 
-from bitcoin import SelectParams
-from bitcoin.core import *
-from bitcoin.core.script import *
+from altcoin import SelectParams
+import altcoin.rpc
 import bitcoin.core.scripteval
 import bitcoin.rpc
+
 from cate import *
 from cate.blockchain import *
 from cate.fees import CFeeRate
@@ -59,14 +59,14 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
   tx3 = audit.load_tx('3_tx3.txt')
 
   # Connect to the wallet we've sent coins to
-  bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
+  altcoin.SelectParams(offer['offer_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
   print "Waiting for TX spending " + b2lx(tx3.GetHash())
   secret = find_secret_from_peer_receive_tx(proxy, audit, tx3)
 
   # Connect to the wallet we're receiving coins from
-  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
+  altcoin.SelectParams(offer['ask_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
   fee_rate = CFeeRate(config['daemons'][ask_currency_code]['fee_per_kb'])
 
   # Get an address to pull the funds into

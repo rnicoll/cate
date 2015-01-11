@@ -6,10 +6,10 @@ import os.path
 import socket
 import sys
 
-from bitcoin import SelectParams
-from bitcoin.core import *
-from bitcoin.core.script import *
-import bitcoin.rpc
+from altcoin import SelectParams
+import altcoin.rpc
+import bitcoin.core.key
+
 from cate import *
 from cate.error import ConfigurationError, MessageError, TradeError
 from cate.fees import CFeeRate
@@ -41,8 +41,8 @@ def process_offer_accepted(acceptance, audit):
 
   # Connect to the daemon
   # TODO: Check the configuration exists
-  bitcoin.SelectParams(config['daemons'][offer_currency_code]['network'], offer_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
+  altcoin.SelectParams(offer['offer_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
   fee_rate = CFeeRate(config['daemons'][offer_currency_code]['fee_per_kb'])
 
   public_key_a = bitcoin.core.key.CPubKey(x(acceptance['public_key_a']))

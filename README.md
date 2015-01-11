@@ -15,12 +15,6 @@ the transaction suggested by the originating user.
 Known Issues
 ============
 
-Python-bitcoinlib does not support AuxPoW blocks, which makes transaction verification
-on the Dogecoin blockchain extremely inefficient. Currently this is disabled, which
-would be a security risk if it wasn't that you can't use this on live networks. AuxPoW
-support is coming, at which point validation of the transactions being relayed will
-be re-enabled. Until then, DO NOT use this on main net.
-
 Transaction malleability is a risk for this application, in that the refund transactions
 are written before their input transactions are confirmed. This means in the transactions
 they take inputs from are modified after being relayed, the refund transactions will be
@@ -39,11 +33,10 @@ Requirements
 CATE requires both Bitcoin Core and Dogecoin Core wallets, as it bridges between
 the two.
 
-CATE requires python-bitcoinlib modified to support Dogecoin, which you can download from
-my Github at https://github.com/rnicoll/python-bitcoinlib/tree/master-dogecoin-keygen .
-A more permanent solution of an altcoin library wrapper around python-bitcoinlib is being
-worked on, which will include support for features such as AuxPoW which are not part
-of python-bitcoinlib.
+CATE requires python-bitcoinlib, which can be found at
+https://github.com/petertodd/python-bitcoinlib . It also requires python-altcoinlib
+which extends the library to add partial altcoin support, and can be found at
+https://github.com/rnicoll/python-altcoinlib
 
 Lastly, CATE requires the "praw" library for accessing reddit. praw can be installed
 via "pip"

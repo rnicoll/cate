@@ -9,9 +9,9 @@ import socket
 import sys
 import re
 
-from bitcoin import SelectParams
-import bitcoin.rpc
-import bitcoin.core.serialize
+import altcoin
+import altcoin.rpc
+from altcoin.core.key import CAltcoinECKey
 
 from cate import *
 from cate.error import AuditError, ConfigurationError, MessageError
@@ -100,8 +100,8 @@ def process_offer(offer, audit):
 
   # Connect to the daemon
   # TODO: Check the configuration exists
-  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
+  altcoin.SelectParams(offer['ask_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
 
   fee_rate = CFeeRate(config['daemons'][ask_currency_code]['fee_per_kb'])
   
@@ -112,7 +112,7 @@ def process_offer(offer, audit):
 
   # Generate a key pair to be used to sign transactions. We generate the key
   # directly rather than via a wallet as it's used on both chains.
-  cec_key = bitcoin.core.key.CECKey()
+  cec_key = CAltcoinECKey()
   cec_key.generate()
   cec_key.set_compressed(True)
   audit.save_private_key('2_private_key.txt', cec_key.get_secretbytes())
@@ -156,7 +156,6 @@ if not os.path.isdir('audits'):
 for message in r.get_messages():
   if message.subject != "CATE transaction offer (1)":
     continue
-
   offer = json.loads(message.body)
   try:
     assert_offer_valid(offer)

@@ -4,9 +4,8 @@ import os.path
 import socket
 import sys
 
-from bitcoin import SelectParams
-from bitcoin.core import *
-import bitcoin.rpc
+from altcoin import SelectParams
+import altcoin.rpc
 import bitcoin.core.scripteval
 from cate import *
 from cate.error import ConfigurationError, MessageError, TradeError
@@ -47,8 +46,8 @@ def process_offer_confirmed(confirmation, audit):
 
   # Connect to the daemon
   # TODO: Check the configuration exists
-  bitcoin.SelectParams(config['daemons'][ask_currency_code]['network'], ask_currency_code)
-  proxy = bitcoin.rpc.Proxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
+  altcoin.SelectParams(offer['ask_currency_hash'])
+  proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
 
   tx1 = audit.load_tx('2_tx1.txt')
   own_refund_tx = CMutableTransaction.from_tx(CTransaction.deserialize(x(acceptance['tx2'])))

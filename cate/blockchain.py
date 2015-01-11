@@ -60,8 +60,8 @@ def get_first_block(proxy, not_before_time):
   block_top = proxy.getblock(lx(blockchain_info['bestblockhash']))
   block_prev = proxy.getblock(proxy.getblockhash(prev_height))
 
-  block_time = (block_top.nTime - block_prev.nTime) / (height - prev_height)
   if block_top.nTime > not_before_time:
+    block_time = max(1, (block_top.nTime - block_prev.nTime) / (height - prev_height))
     blocks_to_go_back = min(height, int(math.ceil((block_top.nTime - not_before_time) / block_time)))
   else:
     # No blocks since the transaction completed, so we start at the top of the chain
