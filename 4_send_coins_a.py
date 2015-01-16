@@ -68,7 +68,7 @@ def process_offer_confirmed(confirmation, audit):
   audit.save_tx('4_tx2.txt', own_refund_tx)
 
   # Verify the TX4 returned by the peer, then sign it
-  assert_refund_tx_valid(peer_refund)
+  assert_refund_tx_valid(peer_refund, int(offer['offer_currency_quantity']))
   peer_refund_tx_sig_a = get_recovery_tx_sig(peer_refund, private_key_a, public_key_b, public_key_a, secret_hash)
 
   proxy.sendrawtransaction(tx1)
