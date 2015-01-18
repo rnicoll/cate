@@ -1,11 +1,12 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import os
 import unittest
 
-from bitcoin.core import x, CMutableTransaction, CMutableTxIn, COutPoint, Hash, Hash160
+from bitcoin.core import b2x, x, COIN, CMutableTransaction, CMutableTxIn, CMutableTxOut, COutPoint, Hash, Hash160
 from bitcoin.core.script import SIGHASH_ALL, SignatureHash, CScript
 from bitcoin.core.scripteval import MissingOpArgumentsError, VerifyOpFailedError, VerifyScript, SCRIPT_VERIFY_P2SH
-from bitcoin.wallet import CBitcoinSecret
+from bitcoin.wallet import CBitcoinSecret, P2PKHBitcoinAddress
 from cate.script import build_send_out_script
 
 class TestSendScript(unittest.TestCase):
@@ -36,25 +37,30 @@ class TestSendScript(unittest.TestCase):
     recipient_public_key = recipient_private_key.pub
     secret = x('88d6e51f777b0b8dc0f429da9f372fbc')
     secret_hash = Hash(secret)
-    random_tx_id = secret_hash # TODO: Make this its own constant
+    send_to_key = CBitcoinSecret.from_secret_bytes(x('15a249b4c09286b877d4708191f1ee8de09903bae034dd9dc8e3286451fa1c80'))
+    send_to_address = P2PKHBitcoinAddress.from_pubkey(send_to_key.pub)
+    random_tx_id = x('8390b4c8198198c6447da1a6fad498209436a785459936b95a1e3b63618c1d8a')
+    value = 10 * COIN
 
     send_tx_script_pub_key = build_send_out_script(sender_public_key, recipient_public_key, secret_hash)
 
+    send_txins = [CMutableTxIn(COutPoint(random_tx_id, 0))]
+    send_txouts = [CMutableTxOut(value, send_tx_script_pub_key)]
+    send_tx = CMutableTransaction(send_txins, send_txouts)
+
     # Test the standard spend transaction
 
-    txins = [CMutableTxIn(COutPoint(random_tx_id, 0))]
-    txouts = []
-    spend_tx = CMutableTransaction(txins, txouts)
+    txins = [CMutableTxIn(COutPoint(Hash(send_tx.serialize()), 0))]
+    txouts = [CMutableTxOut(value, send_to_address.to_scriptPubKey())]
+    recv_tx = CMutableTransaction(txins, txouts)
 
-    sighash = SignatureHash(send_tx_script_pub_key, spend_tx, 0, SIGHASH_ALL)
+    sighash = SignatureHash(send_tx_script_pub_key, recv_tx, 0, SIGHASH_ALL)
     recipient_sig = recipient_private_key.sign(sighash) + (b'\x01') # bytes([SIGHASH_ALL])
-    spend_tx.vin[0].scriptSig = CScript([secret, 0, recipient_sig, recipient_public_key])
+    recv_tx.vin[0].scriptSig = CScript([secret, 0, recipient_sig, recipient_public_key])
 
-    VerifyScript(spend_tx.vin[0].scriptSig, send_tx_script_pub_key, spend_tx, 0, (SCRIPT_VERIFY_P2SH,))
+    VerifyScript(recv_tx.vin[0].scriptSig, send_tx.vout[0].scriptPubKey, recv_tx, 0, (SCRIPT_VERIFY_P2SH,))
 
     # Test a refund transaction
-    txins = [CMutableTxIn(COutPoint(random_tx_id, 0))]
-    txouts = []
     refund_tx = CMutableTransaction(txins, txouts)
 
     sighash = SignatureHash(send_tx_script_pub_key, refund_tx, 0, SIGHASH_ALL)
@@ -66,31 +72,29 @@ class TestSendScript(unittest.TestCase):
 
     # Test invalid transactions are rejected
 
-    txins = [CMutableTxIn(COutPoint(random_tx_id, 0))]
-    txouts = []
-    refund_tx = CMutableTransaction(txins, txouts)
+    invalid_tx = CMutableTransaction(txins, txouts)
 
-    sighash = SignatureHash(send_tx_script_pub_key, refund_tx, 0, SIGHASH_ALL)
+    sighash = SignatureHash(send_tx_script_pub_key, invalid_tx, 0, SIGHASH_ALL)
     sender_sig = sender_private_key.sign(sighash) + (b'\x01') # bytes([SIGHASH_ALL])
     recipient_sig = recipient_private_key.sign(sighash) + (b'\x01') # bytes([SIGHASH_ALL])
 
-    refund_tx.vin[0].scriptSig = CScript([])
+    invalid_tx.vin[0].scriptSig = CScript([])
     with self.assertRaises(MissingOpArgumentsError):
-      VerifyScript(refund_tx.vin[0].scriptSig, send_tx_script_pub_key, refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+      VerifyScript(invalid_tx.vin[0].scriptSig, send_tx_script_pub_key, invalid_tx, 0, (SCRIPT_VERIFY_P2SH,))
 
-    refund_tx.vin[0].scriptSig = CScript([recipient_sig, recipient_public_key, 0])
+    invalid_tx.vin[0].scriptSig = CScript([recipient_sig, recipient_public_key, 0])
     with self.assertRaises(VerifyOpFailedError):
-      VerifyScript(refund_tx.vin[0].scriptSig, send_tx_script_pub_key, refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+      VerifyScript(invalid_tx.vin[0].scriptSig, send_tx_script_pub_key, invalid_tx, 0, (SCRIPT_VERIFY_P2SH,))
 
-    refund_tx.vin[0].scriptSig = CScript([recipient_sig, recipient_public_key, 1])
+    invalid_tx.vin[0].scriptSig = CScript([recipient_sig, recipient_public_key, 1])
     with self.assertRaises(VerifyOpFailedError):
-      VerifyScript(refund_tx.vin[0].scriptSig, send_tx_script_pub_key, refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+      VerifyScript(invalid_tx.vin[0].scriptSig, send_tx_script_pub_key, invalid_tx, 0, (SCRIPT_VERIFY_P2SH,))
 
-    refund_tx.vin[0].scriptSig = CScript([recipient_sig, recipient_public_key, 1, recipient_sig, recipient_public_key])
+    invalid_tx.vin[0].scriptSig = CScript([recipient_sig, recipient_public_key, 1, recipient_sig, recipient_public_key])
     with self.assertRaises(VerifyOpFailedError):
-      VerifyScript(refund_tx.vin[0].scriptSig, send_tx_script_pub_key, refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+      VerifyScript(invalid_tx.vin[0].scriptSig, send_tx_script_pub_key, invalid_tx, 0, (SCRIPT_VERIFY_P2SH,))
 
-    refund_tx.vin[0].scriptSig = CScript([sender_sig, sender_public_key, 1, sender_sig, sender_public_key])
+    invalid_tx.vin[0].scriptSig = CScript([sender_sig, sender_public_key, 1, sender_sig, sender_public_key])
     with self.assertRaises(VerifyOpFailedError):
-      VerifyScript(refund_tx.vin[0].scriptSig, send_tx_script_pub_key, refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+      VerifyScript(invalid_tx.vin[0].scriptSig, send_tx_script_pub_key, invalid_tx, 0, (SCRIPT_VERIFY_P2SH,))
       
