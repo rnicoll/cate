@@ -163,7 +163,7 @@ def build_receive_tx(proxy, send_tx, recipient_seckey, secret, own_address, fee_
 
   prev_txid = send_tx.GetHash()
   prev_out = send_tx.vout[0]
-  txin = CMutableTxIn(COutPoint(prev_txid, 0), nSequence=1)
+  txin = CMutableTxIn(COutPoint(prev_txid, 0))
   txins = [txin]
 
   txin_scriptPubKey = prev_out.scriptPubKey
