@@ -93,7 +93,12 @@ def process_offer(offer, audit):
     + locale.format("%.8f", Decimal(offer_currency_quantity) / COIN, True) + " " + offer_currency_code + " for " \
     + locale.format("%.8f", Decimal(ask_currency_quantity) / COIN, True) + " " + ask_currency_code
 
-  # TODO: Prompt the user for whether the trade is acceptable
+  answer = raw_input("\n\nDo you want to continue with the trade? 'Y' to continue, 'N' to quit.  ").lower()
+  while answer not in ['y', 'yes', 'n', 'no']:
+    answer = raw_input("Not recognised. 'Y' to continue, 'N' to quit.  ").lower()
+  if answer in ['n', 'no']:
+    print "\nTrade aborted"
+    exit(0)
 
   # TODO: If the trade is not acceptable, stop (send rejection notice?)
   # TODO: If the trade is acceptable, continue
