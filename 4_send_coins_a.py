@@ -54,7 +54,7 @@ def process_offer_confirmed(confirmation, audit):
   peer_refund_tx = CTransaction.deserialize(x(confirmation['tx4']))
 
   # Apply signatures to TX2 and check the result is valid
-  sighash = SignatureHash(own_spend_tx.vout[0].scriptPubKeyt, own_refund_tx, 0, SIGHASH_ALL)
+  sighash = SignatureHash(own_spend_tx.vout[0].scriptPubKey, own_refund_tx, 0, SIGHASH_ALL)
   own_refund_tx_sig_a = get_recovery_tx_sig(own_refund_tx, private_key_a, public_key_a, public_key_b, secret_hash)
   if not public_key_a.verify(sighash, own_refund_tx_sig_a):
     raise TradeError("Own signature for refund transaction is invalid.")
