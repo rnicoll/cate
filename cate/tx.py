@@ -10,7 +10,31 @@ import bitcoin.core.serialize
 import error
 import script
 
-def assert_refund_tx_valid(refund_tx):
+def assert_spend_tx_valid(spend_tx, expected_value, sender_public_key, recipient_public_key, secret_hash):
+  """
+  Checks the spend TX relayed by the remote peer actually does pay us, and
+  contains the right value of coins.
+  Raises an exception in case of a problem
+  """
+  # Inputs must be final.
+  for txin in spend_tx.vin:
+    if not txin.is_final():
+      raise error.TradeError("Spend transaction inputs are not all final.")
+
+  if len(spend_tx.vout) == 0:
+    raise error.TradeError("Spend TX does not have any outputs.")
+
+  expected_script = script.build_send_out_script(sender_public_key, recipient_public_key, secret_hash)
+  output_matched = False
+  for txout in spend_tx.vout:
+    if txout.nValue == expected_value and txout.scriptPubKey == expected_script:
+      output_matched = True
+      break
+
+  if not output_matched:
+    raise error.TradeError("Spend TX does not contain a payment to us for the expected number of coins")
+
+def assert_refund_tx_valid(refund_tx, expected_value):
   """
   Checks the refund TX provided by the remote peer matches the expected structure.
   Raises an exception in case of a problem
@@ -33,8 +57,8 @@ def assert_refund_tx_valid(refund_tx):
   if len(refund_tx.vout) != 1:
     raise error.TradeError("Refund TX does not exactly one output.")
 
-  # TODO: Check the output value is close to the trade total (i.e. about right
-  # after fees have been deducted
+  if refund_tx.vout[0].nValue > expected_value:
+    raise error.TradeError("Refund TX is for more than the value of the trade.")
 
   # If the nSequence is 0xffffffff, the transaction can be considered valid
   # despite what the lock time says. Current implementations do not support this,
@@ -139,7 +163,7 @@ def build_receive_tx(proxy, send_tx, recipient_seckey, secret, own_address, fee_
 
   prev_txid = send_tx.GetHash()
   prev_out = send_tx.vout[0]
-  txin = CMutableTxIn(COutPoint(prev_txid, 0), nSequence=1)
+  txin = CMutableTxIn(COutPoint(prev_txid, 0))
   txins = [txin]
 
   txin_scriptPubKey = prev_out.scriptPubKey

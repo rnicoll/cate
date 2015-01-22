@@ -23,9 +23,10 @@ allow someone to steal coins, and the trade can still complete successfully even
 send transactions are modified after being relayed. When BIP62 is introduced on the main
 networks it will further reduce this risk.
 
-Currently Bitcoin Core and Dogecoin Core test networks DO NOT support
-transaction replacement, which is required for CATE to work properly. This does
-work on the respective main nets, and a patch is coming for the test networks.
+Currently Bitcoin Core and Dogecoin Core test networks allow relaying of non-final
+transactions, which could theoretically enable the refund transactions to be misused
+to block spending the send transaction. This is not supported on the main networks
+with the reference client, and a fix is being rolled out for the test networks.
 
 Requirements
 ============

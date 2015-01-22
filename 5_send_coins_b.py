@@ -62,8 +62,8 @@ def process_offer_confirmed(send_notification, audit):
   statbuf = os.stat(audit.get_path('3_tx3.txt'))
   print "Waiting for TX " + b2lx(peer_refund_tx.vin[0].prevout.hash) + " to confirm"
   peer_send_tx = wait_for_tx_to_confirm(proxy, audit, peer_refund_tx.vin[0].prevout.hash, statbuf.st_mtime)
-
-  # FIXME: Verify outputs of the peer's transaction contain the correct script, and number of coins
+  # TODO: Should have the option to wait for multiple confirmations
+  assert_spend_tx_valid(peer_send_tx, int(offer['ask_currency_quantity']), public_key_a, public_key_b, secret_hash)
 
   # Relay our own send transaction
   altcoin.SelectParams(offer['offer_currency_hash'])
