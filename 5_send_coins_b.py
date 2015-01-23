@@ -48,7 +48,7 @@ def process_offer_confirmed(send_notification, audit):
   own_refund_tx_sig_a = x(send_notification['tx4_sig'])
   if not public_key_a.verify(sighash, own_refund_tx_sig_a):
     raise TradeError("Own signature for recovery transaction is invalid.")
-  own_refund_tx_sig_b = get_recovery_tx_sig(own_refund_tx, private_key_b, public_key_b, public_key_a, secret_hash)
+  own_refund_tx_sig_b = get_refund_tx_sig(own_refund_tx, private_key_b, public_key_b, public_key_a, secret_hash)
   if not public_key_b.verify(sighash, own_refund_tx_sig_b):
     raise TradeError("Signature from peer for TX4 is invalid.")
 

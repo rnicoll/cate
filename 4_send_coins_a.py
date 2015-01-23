@@ -55,7 +55,7 @@ def process_offer_confirmed(confirmation, audit):
 
   # Apply signatures to TX2 and check the result is valid
   sighash = SignatureHash(own_spend_tx.vout[0].scriptPubKey, own_refund_tx, 0, SIGHASH_ALL)
-  own_refund_tx_sig_a = get_recovery_tx_sig(own_refund_tx, private_key_a, public_key_a, public_key_b, secret_hash)
+  own_refund_tx_sig_a = get_refund_tx_sig(own_refund_tx, private_key_a, public_key_a, public_key_b, secret_hash)
   if not public_key_a.verify(sighash, own_refund_tx_sig_a):
     raise TradeError("Own signature for refund transaction is invalid.")
   own_refund_tx_sig_b = x(confirmation['tx2_sig'])
@@ -68,7 +68,7 @@ def process_offer_confirmed(confirmation, audit):
 
   # Verify the TX4 returned by the peer, then sign it
   assert_refund_tx_valid(peer_refund_tx, int(offer['offer_currency_quantity']))
-  peer_refund_tx_sig_a = get_recovery_tx_sig(peer_refund_tx, private_key_a, public_key_b, public_key_a, secret_hash)
+  peer_refund_tx_sig_a = get_refund_tx_sig(peer_refund_tx, private_key_a, public_key_b, public_key_a, secret_hash)
 
   proxy.sendrawtransaction(own_spend_tx)
 

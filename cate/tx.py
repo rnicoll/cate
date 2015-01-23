@@ -182,7 +182,7 @@ def build_receive_tx(proxy, send_tx, recipient_seckey, secret, own_address, fee_
 
   return tx
 
-def get_recovery_tx_sig(recovery_tx, own_seckey, recipient_public_key, other_public_key, secret_hash):
+def get_refund_tx_sig(recovery_tx, own_seckey, recipient_public_key, other_public_key, secret_hash):
   """
   Generate a signature for the recovery transaction input from the send transaction.
 

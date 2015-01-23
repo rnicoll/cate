@@ -50,7 +50,7 @@ def process_offer_accepted(acceptance, audit):
   public_key_b = bitcoin.core.key.CPubKey(x(offer['public_key_b']))
 
   assert_refund_tx_valid(peer_refund_tx, int(offer['ask_currency_quantity']))
-  peer_refund_tx_sig = get_recovery_tx_sig(peer_refund_tx, private_key_b, public_key_a, public_key_b, secret_hash)
+  peer_refund_tx_sig = get_refund_tx_sig(peer_refund_tx, private_key_b, public_key_a, public_key_b, secret_hash)
 
   # Generate TX3 & TX4, which are essentially the same as TX1 & TX2 except
   # that ask/offer details are reversed
