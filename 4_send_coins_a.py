@@ -49,28 +49,24 @@ def process_offer_confirmed(confirmation, audit):
   altcoin.SelectParams(offer['ask_currency_hash'])
   proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
 
-  own_spend_tx = audit.load_tx('2_tx1.txt')
+  own_send_tx = audit.load_tx('2_tx1.txt')
   own_refund_tx = CMutableTransaction.from_tx(CTransaction.deserialize(x(acceptance['tx2'])))
   peer_refund_tx = CTransaction.deserialize(x(confirmation['tx4']))
 
   # Apply signatures to TX2 and check the result is valid
-  sighash = SignatureHash(own_spend_tx.vout[0].scriptPubKey, own_refund_tx, 0, SIGHASH_ALL)
-  own_refund_tx_sig_a = get_refund_tx_sig(own_refund_tx, private_key_a, public_key_a, public_key_b, secret_hash)
-  if not public_key_a.verify(sighash, own_refund_tx_sig_a):
-    raise TradeError("Own signature for refund transaction is invalid.")
-  own_refund_tx_sig_b = x(confirmation['tx2_sig'])
-  if not public_key_b.verify(sighash, own_refund_tx_sig_b):
-    raise TradeError("Signature from peer for refund transaction is invalid.")
-
-  own_refund_tx.vin[0].scriptSig = build_recovery_in_script(own_refund_tx_sig_b, public_key_b, own_refund_tx_sig_a, public_key_a)
-  bitcoin.core.scripteval.VerifyScript(own_refund_tx.vin[0].scriptSig, own_spend_tx.vout[0].scriptPubKey, own_refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+  own_send_tx_n = 0
+  own_refund_tx = build_signed_refund_tx(own_send_tx, own_send_tx_n, own_refund_tx, x(confirmation['tx2_sig']),
+                                         public_key_b, private_key_a, secret_hash)
+  # TODO: Catch the exceptions thrown if there's a script verification issue, and report something more helpful
+  bitcoin.core.scripteval.VerifyScript(own_refund_tx.vin[0].scriptSig, own_send_tx.vout[own_send_tx_n].scriptPubKey,
+                                       own_refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
   audit.save_tx('4_tx2.txt', own_refund_tx)
 
   # Verify the TX4 returned by the peer, then sign it
   assert_refund_tx_valid(peer_refund_tx, int(offer['offer_currency_quantity']))
   peer_refund_tx_sig_a = get_refund_tx_sig(peer_refund_tx, private_key_a, public_key_b, public_key_a, secret_hash)
 
-  proxy.sendrawtransaction(own_spend_tx)
+  proxy.sendrawtransaction(own_send_tx)
 
   # Pass back the signature
   return {

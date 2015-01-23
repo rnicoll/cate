@@ -43,17 +43,12 @@ def process_offer_confirmed(send_notification, audit):
   own_refund_tx = CMutableTransaction.from_tx(CTransaction.deserialize(x(confirmation['tx4'])))
 
   # Apply signatures to TX4 and check the result is valid
-  txin_scriptPubKey = own_send_tx.vout[0].scriptPubKey
-  sighash = SignatureHash(txin_scriptPubKey, own_refund_tx, 0, SIGHASH_ALL)
-  own_refund_tx_sig_a = x(send_notification['tx4_sig'])
-  if not public_key_a.verify(sighash, own_refund_tx_sig_a):
-    raise TradeError("Own signature for recovery transaction is invalid.")
-  own_refund_tx_sig_b = get_refund_tx_sig(own_refund_tx, private_key_b, public_key_b, public_key_a, secret_hash)
-  if not public_key_b.verify(sighash, own_refund_tx_sig_b):
-    raise TradeError("Signature from peer for TX4 is invalid.")
-
-  own_refund_tx.vin[0].scriptSig = build_recovery_in_script(own_refund_tx_sig_a, public_key_a, own_refund_tx_sig_b, public_key_b)
-  bitcoin.core.scripteval.VerifyScript(own_refund_tx.vin[0].scriptSig, txin_scriptPubKey, own_refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
+  own_send_tx_n = 0
+  own_refund_tx = build_signed_refund_tx(own_send_tx, own_send_tx_n, own_refund_tx, x(send_notification['tx4_sig']),
+                                         public_key_a, private_key_b, secret_hash)
+  # TODO: Catch the exceptions thrown if there's a script verification issue, and report something more helpful
+  bitcoin.core.scripteval.VerifyScript(own_refund_tx.vin[0].scriptSig, own_send_tx.vout[own_send_tx_n].scriptPubKey,
+                                       own_refund_tx, 0, (SCRIPT_VERIFY_P2SH,))
   audit.save_tx('5_tx4.txt', own_refund_tx)
 
   # Check TX1 has been confirmed

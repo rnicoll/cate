@@ -120,9 +120,9 @@ def process_offer(offer, audit):
   cec_key = CAltcoinECKey()
   cec_key.generate()
   cec_key.set_compressed(True)
-  audit.save_private_key('2_private_key.txt', cec_key.get_secretbytes())
+  audit.save_private_key('2_private_key.txt', cec_key.get_secret_bytes())
   public_key_a = cec_key.get_pubkey()
-  private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(cec_key.get_secretbytes(), True)
+  private_key_a = bitcoin.wallet.CBitcoinSecret.from_secret_bytes(cec_key.get_secret_bytes(), True)
 
   #	Generate TX1 & TX2 as per https://en.bitcoin.it/wiki/Atomic_cross-chain_trading
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)

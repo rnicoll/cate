@@ -47,12 +47,16 @@ def build_send_out_script(sender_public_key, recipient_public_key, secret_hash):
     ]
   )
 
-def build_recovery_in_script(other_sig, other_public_key, recipient_sig, recipient_public_key):
+def build_refund_in_script(other_sig, other_public_key, sender_sig, sender_public_key):
   """
-  Generates the script for performing a recovery transaction from the initial
+  Generates the script for performing a refund transaction from the initial
   transaction.
+
+  Keyword arguments:
+  sender_public_key -- the public key of the peer who sent the coins, and as such they are to be refunded to
+  other_public_key -- the public key of the peer who confirms the transaction but does not receive any coins
   """
-  return CScript([recipient_sig, recipient_public_key, 1, other_sig, other_public_key])
+  return CScript([sender_sig, sender_public_key, 1, other_sig, other_public_key])
 
 """
 Generate the transaction signature for receiving funds from the trade

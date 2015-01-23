@@ -91,7 +91,7 @@ while target_redditor == None:
 cec_key = CAltcoinECKey()
 cec_key.generate()
 cec_key.set_compressed(True)
-audit.save_private_key('1_private_key.txt', cec_key.get_secretbytes())
+audit.save_private_key('1_private_key.txt', cec_key.get_secret_bytes())
 
 trade = input_trade(trade_id, cec_key.get_pubkey())
 audit.save_json('1_offer.json', trade)
