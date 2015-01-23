@@ -126,14 +126,13 @@ def build_send_transaction(proxy, quantity, sender_public_key, recipient_public_
 
   return tx_signed['tx']
 
-def build_unsigned_refund_tx(proxy, send_tx, send_tx_n, own_address, nLockTime, fee_rate):
+def build_unsigned_refund_tx(send_tx, send_tx_n, own_address, nLockTime, fee_rate):
   """
   Generates "TX2" from the guide at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading.
   The same code can also generate TX4. These are the refund transactions in case of
   problems. Transaction outputs are locked to the script:
         Pay w BTC from TX1 to <A's public key>, locked 48 hours in the future, signed by A
 
-  proxy is the RPC proxy to the relevant daemon JSON-RPC interface
   send_tx the (complete, signed) transaction to refund from
   nLockTime the lock time to set on the transaction
   own_address is the private address this client signs the refund transaction with. This must match

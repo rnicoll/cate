@@ -130,7 +130,7 @@ def process_offer(offer, audit):
   own_address = proxy.getnewaddress("CATE refund " + trade_id)
   send_tx = build_send_transaction(proxy, ask_currency_quantity, public_key_a, public_key_b, secret_hash, fee_rate)
   send_tx_n = 0
-  refund_tx = build_unsigned_refund_tx(proxy, send_tx, send_tx_n, own_address, nLockTime, fee_rate)
+  refund_tx = build_unsigned_refund_tx(send_tx, send_tx_n, own_address, nLockTime, fee_rate)
 
   #     Write TX1 to the audit directory as it's not sent to the peer
   audit.save_tx('2_tx1.txt', send_tx)
