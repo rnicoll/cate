@@ -126,7 +126,7 @@ def build_send_transaction(proxy, quantity, sender_public_key, recipient_public_
 
   return tx_signed['tx']
 
-def build_unsigned_refund_tx(proxy, send_tx, own_address, nLockTime, fee_rate):
+def build_unsigned_refund_tx(proxy, send_tx, send_tx_n, own_address, nLockTime, fee_rate):
   """
   Generates "TX2" from the guide at https://en.bitcoin.it/wiki/Atomic_cross-chain_trading.
   The same code can also generate TX4. These are the refund transactions in case of
@@ -142,8 +142,8 @@ def build_unsigned_refund_tx(proxy, send_tx, own_address, nLockTime, fee_rate):
   returns a CMutableTransaction
   """
   prev_txid = send_tx.GetHash()
-  prev_out = send_tx.vout[0]
-  txin = CMutableTxIn(COutPoint(prev_txid, 0), nSequence=1)
+  prev_out = send_tx.vout[send_tx_n]
+  txin = CMutableTxIn(COutPoint(prev_txid, send_tx_n), nSequence=1)
 
   txin_scriptPubKey = prev_out.scriptPubKey
 

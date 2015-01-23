@@ -57,11 +57,12 @@ def process_offer_accepted(acceptance, audit):
   lock_datetime = datetime.datetime.utcnow() + datetime.timedelta(hours=48)
   nLockTime = calendar.timegm(lock_datetime.timetuple())
   own_address = proxy.getnewaddress("CATE refund " + trade_id)
-  tx3 = build_send_transaction(proxy, offer_currency_quantity, public_key_b, public_key_a, secret_hash, fee_rate)
-  own_refund_tx = build_unsigned_refund_tx(proxy, tx3, own_address, nLockTime, fee_rate)
+  send_tx = build_send_transaction(proxy, offer_currency_quantity, public_key_b, public_key_a, secret_hash, fee_rate)
+  send_tx_n = 0
+  own_refund_tx = build_unsigned_refund_tx(proxy, send_tx, send_tx_n, own_address, nLockTime, fee_rate)
 
   #     Write TX3 to audit directory as we don't send it yet
-  audit.save_tx('3_tx3.txt', tx3)
+  audit.save_tx('3_tx3.txt', send_tx)
 
   return {
     'trade_id': trade_id,
