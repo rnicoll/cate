@@ -11,7 +11,6 @@ import bitcoin.rpc
 
 from cate import *
 from cate.error import ConfigurationError
-from cate.fees import CFeeRate
 
 # Scan for transactions where TX3 has been sent to the network,
 # but not yet spent, and should be recovered using TX4
