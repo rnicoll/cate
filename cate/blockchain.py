@@ -51,13 +51,20 @@ def get_first_block(proxy, not_before_time):
   sent at the given time.
 
   Returns a tuple of block height and the first block
-  """
-  blockchain_info = proxy.getblockchaininfo()
 
+  """
+  try:
+    # introduced in Bitcoin Core v 0.9.2  
+    blockchain_info = proxy.getblockchaininfo()
+    height= blockchain_info['blocks']
+    bestblockhash= lx(blockchain_info['bestblockhash'])
+  except bitcoin.rpc.JSONRPCException as e:
+    height=proxy.getblockcount()
+    bestblockhash=proxy.getblockhash(height)
+    
   # Figure out approximate block interval by grabbing the last block, and ten blocks ago
-  height = blockchain_info['blocks']
   prev_height = max(0, height - 10)
-  block_top = proxy.getblock(lx(blockchain_info['bestblockhash']))
+  block_top = proxy.getblock(bestblockhash)
   block_prev = proxy.getblock(proxy.getblockhash(prev_height))
 
   if block_top.nTime > not_before_time:
