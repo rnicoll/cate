@@ -179,7 +179,8 @@ for message in r.get_messages():
   try:
     response = process_offer(offer, audit)
   except socket.error as err:
-    print "Could not connect to wallet."
+    
+    print "Could not connect to wallet:"+str(err)
     sys.exit(1)
   if not response:
     break

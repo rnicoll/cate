@@ -115,7 +115,11 @@ def build_send_transaction(proxy, quantity, sender_public_key, recipient_public_
   # Generate a change transaction if needed
   if total_in > quantity_inc_fee:
     change = total_in - quantity_inc_fee
-    change_address = proxy.getrawchangeaddress()
+    try:
+        # getrawchangeaddress was introduced v0.9 
+        change_address = proxy.getrawchangeaddress()
+    except bitcoin.rpc.JSONRPCException as e:
+        change_address = proxy.getnewaddress()
     change_txout = CTxOut(change, change_address.to_scriptPubKey())
     txouts.append(change_txout)
 
