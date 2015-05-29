@@ -20,7 +20,7 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
   Spends the coins from the trade sent the remote peer, to an address we control.
   """
 
-  print "Spending coins from trade " + trade_id
+  print ("Spending coins from trade " + trade_id)
   audit = TradeDao(trade_id)
 
   offer = audit.load_json('2_offer.json')
@@ -35,7 +35,7 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
 
   # Monitor the block chain for TX3 being relayed
   statbuf = os.stat(audit.get_path('4_tx2.txt'))
-  print "Waiting for TX " + b2lx(peer_send_tx_id) + " to confirm"
+  print ("Waiting for TX " )+ b2lx(peer_send_tx_id) + " to confirm"
   peer_send_tx = wait_for_tx_to_confirm(proxy, audit, peer_send_tx_id, statbuf.st_mtime)
 
   # TODO: Verify the secret we have matches the one expected; this is covered by
@@ -53,7 +53,7 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
     proxy.sendrawtransaction(own_receive_tx)
   except bitcoin.rpc.JSONRPCException as err:
     if err.error['code'] == -25:
-      print "Send transaction " + b2lx(peer_send_tx_id) + " for trade " + trade_id + " has already been spent"
+      print ("Send transaction " + b2lx(peer_send_tx_id) + " for trade " + trade_id + " has already been spent")
     else:
       raise err
   ready_transactions.pop(peer_send_tx_id, None)
@@ -67,7 +67,7 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
 try:
   config = load_configuration("config.yml")
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(0)
 
 # Scan the audit directory for transactions ready to spend

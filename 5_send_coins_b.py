@@ -55,7 +55,7 @@ def process_offer_confirmed(send_notification, audit):
   altcoin.SelectParams(offer['ask_currency_hash'])
   proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][ask_currency_code]['port'], btc_conf_file=config['daemons'][ask_currency_code]['config'])
   statbuf = os.stat(audit.get_path('3_tx3.txt'))
-  print "Waiting for TX " + b2lx(peer_refund_tx.vin[0].prevout.hash) + " to confirm"
+  print ("Waiting for TX {0} to confirm".format(b2lx(peer_refund_tx).vin[0].prevout.hash))
   peer_send_tx = wait_for_tx_to_confirm(proxy, audit, peer_refund_tx.vin[0].prevout.hash, statbuf.st_mtime)
   # TODO: Should have the option to wait for multiple confirmations
   assert_spend_tx_valid(peer_send_tx, int(offer['ask_currency_quantity']), public_key_a, public_key_b, secret_hash)
@@ -70,14 +70,14 @@ def process_offer_confirmed(send_notification, audit):
 try:
   config = load_configuration("config.yml")
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(0)
 
 r = praw.Reddit(user_agent = USER_AGENT)
 try:
   reddit_login(r, config)
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(0)
 
 for message in r.get_messages():
@@ -93,7 +93,7 @@ for message in r.get_messages():
   audit = TradeDao(trade_id)
 
   if audit.file_exists('5_send_notification.json'):
-    print "Offer send_notification " + trade_id + " already received, ignoring offer"
+    print ("Offer send_notification {0} already received, ignoring offer".format(trade_id))
     continue
 
   # Record the received response
@@ -102,7 +102,7 @@ for message in r.get_messages():
   try:
     response = process_offer_confirmed(send_notification, audit)
   except socket.error as err:
-    print "Could not connect to wallet."
+    print ("Could not connect to wallet.")
     sys.exit(1)
   if not response:
     break

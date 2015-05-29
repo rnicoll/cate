@@ -1,4 +1,4 @@
-import error
+import cate.error
 
 import bitcoin
 from bitcoin.core import *

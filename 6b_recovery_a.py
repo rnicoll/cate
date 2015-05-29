@@ -18,7 +18,7 @@ from cate.error import ConfigurationError
 try:
   config = load_configuration("config.yml")
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(0)
 
 # Scan the audit directory for transactions ready to spend
@@ -45,12 +45,12 @@ for trade_id in os.listdir('audits'):
     proxy.sendrawtransaction(tx2)
   except bitcoin.rpc.JSONRPCException as err:
     if err.error['code'] == -25:
-        print "TX1 for trade " + trade_id + " has already been spent"
+        print ("TX1 for trade " )+ trade_id + " has already been spent"
     if err.error['code'] == -26:
-        print "Refund transaction is not yet final; please wait 48 hours after the start of the trade"
+        print ("Refund transaction is not yet final); please wait 48 hours after the start of the trade"
         continue
     if err.error['code'] == -27:
-        print "Refund transaction " + b2lx(tx2.GetHash()) + " has already been sent"
+        print ("Refund transaction " )+ b2lx(tx2.GetHash()) + " has already been sent"
     else:
       raise err
 

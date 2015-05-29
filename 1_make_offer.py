@@ -21,14 +21,14 @@ def input_trade(trade_id, pubkey):
     # TODO: Show a useful error on invalid code
 
   while offer_currency_quantity < Decimal(0.00000001):
-    offer_currency_quantity = Decimal(raw_input("Quantity offered: "))
+    offer_currency_quantity = Decimal(input("Quantity offered: "))
 
   while ask_currency_code not in NETWORK_HASHES:
     ask_currency_code = input_currency_code("What currency are you wanting, and how much?")
     # TODO: Show a useful error on invalid code
       
   while ask_currency_quantity < Decimal(0.00000001):
-    ask_currency_quantity = Decimal(raw_input("Quantity asked: "))
+    ask_currency_quantity = Decimal(input("Quantity asked: "))
 
   # TODO: Repeat the trade back to the user for them to validate
 
@@ -47,9 +47,9 @@ def input_currency_code(prompt):
   a valid input is presented.
   """
   currency_code = None
-  print prompt
+  print (prompt)
   while currency_code not in NETWORK_HASHES:
-    currency_code = raw_input("Currency (BTC, LTC, DOGE): ")
+    currency_code = input("Currency (BTC, LTC, DOGE): ")
     if currency_code.upper() not in NETWORK_HASHES:
       print ("Unknown currency \"" + currency_code + "\", please enter one of: ") + ", ".join(NETWORK_HASHES.keys())
     else:
@@ -60,14 +60,14 @@ def input_currency_code(prompt):
 try:
   config = load_configuration("config.yml")
 except Exception as e:
-  print e
+  print (e)
   sys.exit(1)
 
 r = praw.Reddit(user_agent = USER_AGENT)
 try:
   reddit_login(r, config)
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(1)
 
 # Create a unique trade ID
@@ -77,9 +77,9 @@ audit = TradeDao(trade_id)
 # Query the user for details of the transaction
 target_redditor = None
 
-print "Okay, first of all I need to know who to make an offer to."
+print ("Okay, first of all I need to know who to make an offer to.")
 while target_redditor == None:
-  target_username = raw_input("reddit username: ")
+  target_username = input("reddit username: ")
   try:
     target_redditor = r.get_redditor(target_username)
   except requests.exceptions.HTTPError:
@@ -98,4 +98,4 @@ audit.save_json('1_offer.json', trade)
 
 r.send_message(target_redditor, 'CATE transaction offer (1)', json.dumps(trade))
 
-print "Trade offer " + trade_id + " sent"
+print ("Trade offer {0} sent".format(trade_id))

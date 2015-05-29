@@ -48,10 +48,10 @@ def assert_offer_valid(offer):
   offer_currency_code = NETWORK_CODES[offer['offer_currency_hash']]
   ask_currency_code = NETWORK_CODES[offer['ask_currency_hash']]
 
-  if not isinstance( offer['offer_currency_quantity'], ( int, long ) ):
+  if not isinstance( offer['offer_currency_quantity'], ( int ) ):
     raise MessageError( "Offered currency quantity is not a number.")
 
-  if not isinstance( offer['ask_currency_quantity'], ( int, long ) ):
+  if not isinstance( offer['ask_currency_quantity'], ( int ) ):
     raise MessageError( "Asked currency quantity is not a number.")
 
   if offer_currency_code not in config['daemons']:
@@ -89,19 +89,18 @@ def process_offer(offer, audit):
   public_key_b = bitcoin.core.key.CPubKey(x(offer['public_key_b']))
 
   # TODO: Include details of who offered the trade
-  print "Received offer " + trade_id + " of " \
+  print("Received offer " + trade_id + " of " \
     + locale.format("%.8f", Decimal(offer_currency_quantity) / COIN, True) + " " + offer_currency_code + " for " \
-    + locale.format("%.8f", Decimal(ask_currency_quantity) / COIN, True) + " " + ask_currency_code
+    + locale.format("%.8f", Decimal(ask_currency_quantity) / COIN, True) + " " + ask_currency_code)
 
-  answer = raw_input("\n\nDo you want to continue with the trade? 'Y' to continue, 'N' to quit.  ").lower()
+  answer = input("\n\nDo you want to continue with the trade? 'Y' to continue, 'N' to quit.  ").lower()
   while answer not in ['y', 'yes', 'n', 'no']:
-    answer = raw_input("Not recognised. 'Y' to continue, 'N' to quit.  ").lower()
+    answer = input("Not recognised. 'Y' to continue, 'N' to quit.  ").lower()
   if answer in ['n', 'no']:
-    print "\nTrade aborted"
+    print ("\nTrade aborted")
     exit(0)
 
-  # TODO: If the trade is not acceptable, stop (send rejection notice?)
-  # TODO: If the trade is acceptable, continue
+  # TODO: If the trade is not acceptable send rejection notice?
 
   # Connect to the daemon
   # TODO: Check the configuration exists
@@ -132,7 +131,7 @@ def process_offer(offer, audit):
   send_tx_n = 0
   refund_tx = build_unsigned_refund_tx(send_tx, send_tx_n, own_address, nLockTime, fee_rate)
 
-  #     Write TX1 to the audit directory as it's not sent to the peer
+  # Write TX1 to the audit directory as it's not sent to the peer
   audit.save_tx('2_tx1.txt', send_tx)
 
   #	Send TX2 to remote user along with our address
@@ -146,14 +145,14 @@ def process_offer(offer, audit):
 try:
   config = load_configuration("config.yml")
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(1)
 
 r = praw.Reddit(user_agent = USER_AGENT)
 try:
   reddit_login(r, config)
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(1)
 
 if not os.path.isdir('audits'):
@@ -172,7 +171,7 @@ for message in r.get_messages():
   trade_id = offer['trade_id']
   audit = TradeDao(trade_id)
   if audit.file_exists('2_offer.json'):
-    print "Offer " + trade_id + " already received, ignoring offer"
+    print ("Offer {0} already received, ignoring offer".format(trade_id))
     continue
   audit.save_json('2_offer.json', offer)
 
@@ -180,7 +179,7 @@ for message in r.get_messages():
     response = process_offer(offer, audit)
   except socket.error as err:
     
-    print "Could not connect to wallet:"+str(err)
+    print ("Could not connect to wallet: " + str(err))
     sys.exit(1)
   if not response:
     break

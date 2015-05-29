@@ -3,7 +3,6 @@ from bitcoin.base58 import decode
 from decimal import Decimal
 import hashlib
 import os.path
-from StringIO import StringIO
 import yaml
 import sys
 

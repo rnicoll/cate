@@ -73,14 +73,14 @@ def process_offer_accepted(acceptance, audit):
 try:
   config = load_configuration("config.yml")
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(0)
 
 r = praw.Reddit(user_agent = USER_AGENT)
 try:
   reddit_login(r, config)
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(0)
 
 for message in r.get_messages():
@@ -96,14 +96,14 @@ for message in r.get_messages():
   trade_id = acceptance['trade_id']
   audit = TradeDao(trade_id)
   if audit.file_exists('3_acceptance.json'):
-    print "Offer acceptance " + trade_id + " already received, ignoring offer"
+    print ("Offer acceptance {0} already received, ignoring offer".format(trade_id))
     continue
   audit.save_json('3_acceptance.json', acceptance)
 
   try:
     response = process_offer_accepted(acceptance, audit)
   except socket.error as err:
-    print "Could not connect to wallet."
+    print ("Could not connect to wallet.")
     sys.exit(1)
   if not response:
     break

@@ -15,15 +15,15 @@ ADDRESS_LENGTH = 25
 
 # hashes of the genesis blocks for each network
 NETWORK_HASHES = {
-  'BTC': '000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943',
-  'DOGE': 'bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e',
+  'BTC': '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f',
+  'DOGE': '1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691',
   'LTC': 'f5ae71e26c74beacc88382716aced69cddf3dffff24f384e1808905e0188f68f'
 }
 
 # Reverse-map of NETWORK_HASHES
 NETWORK_CODES = {
-  '000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943': 'BTC',
-  'bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e': 'DOGE',
+  '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f': 'BTC',
+  '1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691': 'DOGE',
   'f5ae71e26c74beacc88382716aced69cddf3dffff24f384e1808905e0188f68f': 'LTC'
 }
 
@@ -112,7 +112,7 @@ class TradeDao(object):
   def load_secret(self, filename):
     real_path = self.get_path(filename)
     self.assert_file_exists(real_path)
-    with open(real_path, 'r', 0700) as secret_file:
+    with open(real_path, 'r', 700) as secret_file:
       return x(secret_file.read())
 
   def load_tx(self, filename):
@@ -142,11 +142,11 @@ class TradeDao(object):
   def save_secret(self, filename, secret):
     real_path = self.get_path(filename)
     self.assert_file_does_not_exist(real_path)
-    with open(real_path, "w", 0700) as secret_file:
+    with open(real_path, "w", 700) as secret_file:
       secret_file.write(b2x(secret))
 
   def save_text(self, filename, text):
     real_path = self.get_path(filename)
     self.assert_file_does_not_exist(real_path)
-    with open(real_path, "w", 0700) as text_file:
+    with open(real_path, "w", 700) as text_file:
       text_file.write(text)

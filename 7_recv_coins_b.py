@@ -49,7 +49,7 @@ def find_secret_from_peer_receive_tx(proxy, audit,  own_send_tx):
   return extract_secret_from_receive_script(recv_tx, recv_tx_in)
 
 def spend_peer_send_tx(peer_send_tx_id, trade_id):
-  print "Spending coins from trade " + trade_id
+  print ("Spending coins from trade " )+ trade_id
 
   audit = TradeDao(trade_id)
   offer = audit.load_json('1_offer.json')
@@ -61,7 +61,7 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
   # Connect to the wallet we've sent coins to
   altcoin.SelectParams(offer['offer_currency_hash'])
   proxy = altcoin.rpc.AltcoinProxy(service_port=config['daemons'][offer_currency_code]['port'], btc_conf_file=config['daemons'][offer_currency_code]['config'])
-  print "Waiting for TX spending " + b2lx(tx3.GetHash())
+  print ("Waiting for TX spending " )+ b2lx(tx3.GetHash())
   secret = find_secret_from_peer_receive_tx(proxy, audit, tx3)
 
   # Connect to the wallet we're receiving coins from
@@ -84,7 +84,7 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
     proxy.sendrawtransaction(own_receive_tx)
   except bitcoin.rpc.JSONRPCException as err:
     if err.error['code'] == -25:
-      print "Send transaction " + b2lx(peer_send_tx_id) + " for trade " + trade_id + " has already been spent"
+      print ("Send transaction {0} for trade {1} has already beent spent".format(b2lx(peer_send_tx_id), trade_id))
     else:
       raise err
   ready_transactions.pop(peer_send_tx_id, None)
@@ -98,7 +98,7 @@ def spend_peer_send_tx(peer_send_tx_id, trade_id):
 try:
   config = load_configuration("config.yml")
 except ConfigurationError as e:
-  print e
+  print (e)
   sys.exit(0)
 
 # Scan the audit directory for transactions ready to spend
