@@ -52,3 +52,7 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# Blockchain/wallet
+*.spvchain
+*.wallet
