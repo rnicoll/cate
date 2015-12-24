@@ -15,14 +15,14 @@
  */
 package org.libdohj.cate.controller;
 
-import java.io.File;
+import org.libdohj.cate.Network;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 
 import javafx.application.Platform;
+import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
@@ -36,29 +36,27 @@ import javafx.scene.control.TextField;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import javafx.beans.property.SimpleObjectProperty;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
-import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.FilteredBlock;
-import org.bitcoinj.core.GetDataMessage;
 import org.bitcoinj.core.InsufficientMoneyException;
-import org.bitcoinj.core.Message;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.core.Peer;
-import org.bitcoinj.core.PeerAddress;
 import org.bitcoinj.core.Transaction;
+import org.bitcoinj.core.TransactionInput;
+import org.bitcoinj.core.TransactionOutPoint;
+import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
 import org.bitcoinj.core.Wallet.SendRequest;
-import org.bitcoinj.core.listeners.PeerConnectionEventListener;
-import org.bitcoinj.core.listeners.PeerDataEventListener;
-import org.bitcoinj.core.listeners.WalletCoinEventListener;
-import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
-import org.libdohj.cate.cellfactories.WalletBalanceCellFactory;
-import org.libdohj.cate.cellfactories.WalletNetworkCellFactory;
 import org.libdohj.params.DogecoinMainNetParams;
 import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.LitecoinMainNetParams;
@@ -95,15 +93,15 @@ public class MainController {
     @FXML
     private TableView txList;
     @FXML
-    private TableColumn<Transaction, String> txNetworkColumn;
+    private TableColumn<WalletTransaction, String> txNetworkColumn;
     @FXML
-    private TableColumn<Transaction, Date> txDateColumn;
+    private TableColumn<WalletTransaction, Date> txDateColumn;
     @FXML
-    private TableColumn<Transaction, String> txTypeColumn;
+    private TableColumn<WalletTransaction, String> txTypeColumn;
     @FXML
-    private TableColumn<Transaction, Coin> txAmountColumn;
+    private TableColumn<WalletTransaction, String> txAmountColumn;
     @FXML
-    private TableColumn<Transaction, String> txStateColumn;
+    private TableColumn<WalletTransaction, String> txStateColumn;
     @FXML
     private TextField sendAddress;
     @FXML
@@ -113,25 +111,61 @@ public class MainController {
     @FXML
     private Button sendButton;
     @FXML
-    private TableView walletList;
+    private TableView<Network> walletList;
     @FXML
-    private TableColumn<Wallet, String> walletNetwork;
+    private TableColumn<Network, String> networkName;
     @FXML
-    private TableColumn<Wallet, Coin> walletBalance;
+    private TableColumn<Network, String> networkBalance;
+    @FXML
+    private TableColumn<Network, Number> networkBlocks;
+    @FXML
+    private TableColumn<Network, Number> networkPeers;
 
-    private final ObservableList<NetworkBridge> networks = FXCollections.observableArrayList();
+    private final ObservableList<Network> networks = FXCollections.observableArrayList();
     private final ObservableList<Wallet> wallets = FXCollections.observableArrayList();
-    private final ObservableList<Transaction> transactions = FXCollections.observableArrayList();
+    private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
 
     @FXML
     public void initialize() {
         receiveSelector.setItems(wallets);
         sendSelector.setItems(wallets);
         txList.setItems(transactions);
-        walletList.setItems(wallets);
+        walletList.setItems(networks);
 
-        walletNetwork.setCellValueFactory(new WalletNetworkCellFactory());
-        walletBalance.setCellValueFactory(new WalletBalanceCellFactory());
+        // Set up wallet list rendering
+        networkName.setCellValueFactory((TableColumn.CellDataFeatures<Network, String> param) -> {
+            final Network network = param.getValue();
+            final NetworkParameters params = network.getParams();
+            return new SimpleStringProperty(getNetworkName(params));
+        });
+        networkBalance.setCellValueFactory((TableColumn.CellDataFeatures<Network, String> param) -> {
+            final Network network = param.getValue();
+            return network.getObservableBalance();
+        });
+        networkPeers.setCellValueFactory((TableColumn.CellDataFeatures<Network, Number> param) -> {
+            final Network network = param.getValue();
+            return network.getObservablePeerCount();
+        });
+        networkBlocks.setCellValueFactory((TableColumn.CellDataFeatures<Network, Number> param) -> {
+            final Network network = param.getValue();
+            return network.getObservableBlocks();
+        });
+
+        // Set up transaction column rendering
+        txNetworkColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
+            final WalletTransaction transaction = param.getValue();
+            final NetworkParameters params = transaction.getParams();
+            return new SimpleStringProperty(getNetworkName(params));
+        });
+        txDateColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, Date> param) -> {
+            final WalletTransaction transaction = param.getValue();
+            return new SimpleObjectProperty(transaction.getTransaction().getUpdateTime());
+        });
+        txAmountColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
+            final WalletTransaction transaction = param.getValue();
+            return new SimpleStringProperty(transaction.getBalanceChange().toPlainString());
+        });
+
         receiveSelector.setConverter(new WalletToNetworkNameConvertor());
         sendSelector.setConverter(receiveSelector.getConverter());
 
@@ -139,11 +173,15 @@ public class MainController {
         NetworkParameters bitcoinTestParams = networksByName.get("Bitcoin test");
         NetworkParameters dogecoinParams = networksByName.get("Dogecoin");
         NetworkParameters dogecoinTestParams = networksByName.get("Dogecoin test");
-        
-        newWallet(bitcoinParams);
-        newWallet(bitcoinTestParams);
-        newWallet(dogecoinParams);
-        newWallet(dogecoinTestParams);
+
+        /* newWallet(bitcoinParams);
+        newWallet(bitcoinTestParams); */
+        networks.add(new Network(dogecoinParams, this));
+        networks.add(new Network(dogecoinTestParams, this));
+
+        for (Network network: networks) {
+            network.run();
+        }
 
         receiveSelector.setOnAction((ActionEvent event) -> {
             if (event.getTarget().equals(receiveSelector)) {
@@ -157,24 +195,34 @@ public class MainController {
 
         sendButton.setOnAction((ActionEvent event) -> {
             final Address address;
+            final Coin amount;
             final Wallet wallet = sendSelector.getValue();
 
             try {
                 address = Address.fromBase58(wallet.getNetworkParameters(), sendAddress.getText());
             } catch(AddressFormatException ex) {
-                Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("Address Incorrect");
-
-                alert.setContentText("The provided address is invalid: "
+                Alert alert = new Alert(Alert.AlertType.ERROR, "The provided address is invalid: "
                     + ex.getMessage());
-
+                alert.setTitle("Address Incorrect");
                 alert.showAndWait();
                 return;
             }
 
-            // TODO validate!
-            SendRequest req = SendRequest.to(address, Coin.parseCoin(sendAmount.getText()));
             try {
+                amount = Coin.parseCoin(sendAmount.getText());
+            } catch(IllegalArgumentException ex) {
+                Alert alert = new Alert(Alert.AlertType.ERROR, "The number of coins to send is invalid: "
+                    + ex.getMessage());
+                alert.setTitle("Amount Incorrect");
+                alert.showAndWait();
+                return;
+            }
+
+            // TODO: Calculate fees in a network-appropriate way
+            SendRequest req = SendRequest.to(address, amount);
+            try {
+                // Wondering if we should have all wallet interaction on a per-network
+                // thread, and therefore this should be going via the network bridge.
                 wallet.sendCoins(req);
             } catch (InsufficientMoneyException e) {
                 Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -195,46 +243,27 @@ public class MainController {
     public List<Service> stop() {
         final List<Service> services = new ArrayList<>(networks.size());
 
-        for (NetworkBridge bridge: networks) {
+        for (Network bridge: networks) {
             services.add(bridge.getKit().stopAsync());
+            try {
+                bridge.join();
+            } catch(InterruptedException ex) {
+                // TODO: Log
+                // Ignore and move on to the next thread
+            }
         }
 
         return services;
     }
 
-    /**
-     * Load/create a new wallet and add it to the UI.
-     */
-    private void newWallet(NetworkParameters params) {
-        final NetworkBridge bridge = new NetworkBridge(params);
-
-        final WalletAppKit kit = new WalletAppKit(params, new File("."), "cate_" + params.getId()) {
-            @Override
-            protected void onSetupCompleted() {
-                peerGroup().setConnectTimeoutMillis(1000);
-
-                peerGroup().addDataEventListener(bridge);
-                peerGroup().addConnectionEventListener(bridge);
-                wallet().addCoinEventListener(bridge);
-
-                Platform.runLater(() -> {
-                    MainController.this.wallets.add(wallet());
-                    if (MainController.this.wallets.size() == 1) {
-                        // We've just added the first wallet, choose it
-                        MainController.this.receiveSelector.setValue(wallet());
-                        MainController.this.sendSelector.setValue(wallet());
-                    }
-                    // TODO: Constrain this list?
-                    transactions.addAll(wallet().getTransactions(false));
-                });
-            }
-        };
-        kit.setAutoStop(false);
-        kit.setBlockingStartup(false);
-
-        kit.startAsync();
-        bridge.setKit(kit);
-        networks.add(bridge);
+    public void addTransaction(NetworkParameters params, Transaction tx, Coin prevBalance, Coin newBalance) {
+        // TODO: Transaction lists should be aggregated from listed held by each
+        // network.
+        // For now we do the actual modification on the UI thread to avoid
+        // race conditions
+        Platform.runLater(() -> {
+            transactions.add(new WalletTransaction(params, tx, newBalance.subtract(prevBalance)));
+        });
     }
 
     /**
@@ -242,6 +271,56 @@ public class MainController {
      */
     public static String getNetworkName(final NetworkParameters params) {
         return networkNames.get(params);
+    }
+
+    /**
+     * Register a wallet to be tracked by this controller.
+     */
+    public void registerWallet(Wallet wallet) {
+        Platform.runLater(() -> {
+            this.wallets.add(wallet);
+            if (this.wallets.size() == 1) {
+                // We've just added the first wallet, choose it
+                this.receiveSelector.setValue(wallet);
+                this.sendSelector.setValue(wallet);
+            }
+
+            // Pre-sort transactions by date
+            final SortedSet<Transaction> rawTransactions = new TreeSet<Transaction>(
+                (Transaction a, Transaction b) -> a.getUpdateTime().compareTo(b.getUpdateTime())
+            );
+            rawTransactions.addAll(wallet.getTransactions(false));
+
+            final Map<TransactionOutPoint, Coin> balances = new HashMap<>();
+            // TODO: Should get the value change or information on relevant outputs
+            // or something more useful form Wallet
+            // Meanwhile we do a bunch of duplicate work to recalculate these values,
+            // here
+            for (Transaction tx: rawTransactions) {
+                long valueChange = 0;
+                for (TransactionInput in: tx.getInputs()) {
+                    Coin balance = balances.get(in.getOutpoint());
+                    // Spend the value on the listed input
+                    if (balance != null) {
+                        valueChange -= balance.value;
+                        balances.remove(in.getOutpoint());
+                    }
+                }
+                for (TransactionOutput out: tx.getOutputs()) {
+                    if (out.isMine(wallet)) {
+                        valueChange += out.getValue().value;
+                        Coin balance = balances.get(out.getOutPointFor());
+                        if (balance == null) {
+                            balance = out.getValue();
+                        } else {
+                            balance.add(out.getValue());
+                        }
+                        balances.put(out.getOutPointFor(), balance);
+                    }
+                }
+                transactions.add(new WalletTransaction(wallet.getParams(), tx, Coin.valueOf(valueChange)));
+            }
+        });
     }
 
     private class WalletToNetworkNameConvertor extends StringConverter<Wallet> {
@@ -266,105 +345,37 @@ public class MainController {
         }
     }
 
-    /**
-     * Class which manages incoming events and knows which network they apply
-     * to.
-     */
-    private class NetworkBridge implements PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+    public static class WalletTransaction extends Object {
         private final NetworkParameters params;
-        private WalletAppKit kit;
-        private boolean synced = false;
+        private final Transaction transaction;
+        private final Coin balanceChange;
 
-        public NetworkBridge(NetworkParameters params) {
+        private WalletTransaction(final NetworkParameters params,
+            final Transaction transaction, final Coin balanceChange) {
             this.params = params;
-        }
-
-        @Override
-        public void onBlocksDownloaded(Peer peer, Block block, FilteredBlock filteredBlock, int blocksLeft) {
-            if (blocksLeft <= 0) {
-                synced = true;
-            }
-
-            Platform.runLater(() -> {
-                updateSyncStateOnUIThread(blocksLeft);
-            });
-        }
-
-        @Override
-        public void onChainDownloadStarted(Peer peer, int blocksLeft) {
-            Platform.runLater(() -> {
-                updateSyncStateOnUIThread(blocksLeft);
-            });
-        }
-
-        private void updateSyncStateOnUIThread(final int blocksLeft) {
-            /* if (synced) {
-                status.setText("Synchronized");
-            } else {
-                status.setText("Syncing");
-            }
-            if (null != kit) {
-                blocks.setText(Integer.toString(kit.chain().getBestChainHeight()));
-            }
-            blocksRemaining.setText(Integer.toString(blocksLeft)); */
-        }
-
-        @Override
-        public Message onPreMessageReceived(Peer peer, Message m) {
-            return null;
-        }
-
-        @Override
-        public List<Message> getData(Peer peer, GetDataMessage m) {
-            return null;
-        }
-
-        @Override
-        public void onPeersDiscovered(Set<PeerAddress> peerAddresses) {
-
-        }
-
-        @Override
-        public void onPeerConnected(Peer peer, int peerCount) {
-            /* Platform.runLater(() -> {
-                peers.setText(Integer.toString(peerCount));
-            }); */
-        }
-
-        @Override
-        public void onPeerDisconnected(Peer peer, int peerCount) {
-            /* Platform.runLater(() -> {
-                peers.setText(Integer.toString(peerCount));
-            }); */
-        }
-
-        @Override
-        public void onCoinsReceived(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
-            // TODO: Is this enough information or do we need a wrapper that tracks recv/send
-            Platform.runLater(() -> {
-                transactions.add(tx);
-            });
-        }
-
-        @Override
-        public void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
-            Platform.runLater(() -> {
-                transactions.add(tx);
-            });
+            this.transaction = transaction;
+            this.balanceChange = balanceChange;
         }
 
         /**
-         * @return the kit
+         * @return the network params
          */
-        public WalletAppKit getKit() {
-            return kit;
+        public NetworkParameters getParams() {
+            return params;
         }
 
         /**
-         * @param kit the kit to set
+         * @return the transaction
          */
-        public void setKit(WalletAppKit kit) {
-            this.kit = kit;
+        public Transaction getTransaction() {
+            return transaction;
+        }
+
+        /**
+         * @return the balanceChange
+         */
+        public Coin getBalanceChange() {
+            return balanceChange;
         }
     }
 }

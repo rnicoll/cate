@@ -12,7 +12,7 @@
 <BorderPane
     xmlns:fx="http://javafx.com/fxml/1"
     xmlns="http://javafx.com/javafx/8.0.40"
-    prefHeight="500.0"    prefWidth="840.0"
+    prefHeight="500.0"    prefWidth="900.0"
     fx:controller="org.libdohj.cate.controller.MainController">
 
     <center>
@@ -54,23 +54,27 @@
                 <ComboBox fx:id="sendSelector" GridPane.columnIndex="0" GridPane.rowIndex="0" prefWidth="120" />
                 <TextField fx:id="sendAddress" promptText="Address" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.columnSpan="3" minWidth="260" />
 
-                <TextField fx:id="sendAmount" promptText="Amount" GridPane.columnIndex="1" prefWidth="100" GridPane.rowIndex="1" />
-                <ComboBox fx:id="sendUnit" GridPane.columnIndex="2" GridPane.rowIndex="1" prefWidth="100" />
-                <Button fx:id="sendButton" mnemonicParsing="false" text="Send" GridPane.columnIndex="3" GridPane.rowIndex="1" />
+                <TextField fx:id="sendAmount" promptText="Amount" prefWidth="100" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                <Button fx:id="sendButton" mnemonicParsing="false" text="Send" GridPane.columnIndex="2" GridPane.rowIndex="1" />
             </GridPane>
         </VBox>
     </center>
 
     <right>
-        <VBox BorderPane.alignment="TOP_CENTER" prefWidth="200" >
+        <VBox BorderPane.alignment="TOP_CENTER" prefWidth="280" >
             <BorderPane.margin>
                 <Insets bottom="10.0" left="5.0" right="10.0" top="10.0"/>
             </BorderPane.margin>
             <Label text="Wallets" VBox.vgrow="NEVER" />
             <TableView fx:id="walletList" VBox.vgrow="ALWAYS">
                 <columns>
-                    <TableColumn fx:id="walletNetwork" text="Wallet" prefWidth="120" />
-                    <TableColumn fx:id="walletBalance" text="Balance" prefWidth="80" resizable="true" />
+                    <TableColumn fx:id="networkName" text="Wallet" prefWidth="100" />
+                    <TableColumn fx:id="networkBalance" text="Balance" prefWidth="60" resizable="true" />
+                    <TableColumn fx:id="networkBlocks" text="Blocks" prefWidth="60" />
+                    <TableColumn fx:id="networkPeers" text="Peers" prefWidth="60" />
+                    <!--
+                    <TableColumn fx:id="networkBlocksRemaining" text="Remaining" prefWidth="70" />
+                    -->
                 </columns>
             </TableView>
         </VBox>
