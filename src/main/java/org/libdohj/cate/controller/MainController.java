@@ -16,8 +16,14 @@
 package org.libdohj.cate.controller;
 
 import org.libdohj.cate.Network;
+
+import java.text.DateFormat;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -36,13 +42,6 @@ import javafx.scene.control.TextField;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import javafx.beans.property.SimpleObjectProperty;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
@@ -89,19 +88,15 @@ public class MainController {
     @FXML
     private TextField myAddress;
     @FXML
-    private Button copyAddress;
-    @FXML
     private TableView txList;
     @FXML
     private TableColumn<WalletTransaction, String> txNetworkColumn;
     @FXML
-    private TableColumn<WalletTransaction, Date> txDateColumn;
-    @FXML
-    private TableColumn<WalletTransaction, String> txTypeColumn;
+    private TableColumn<WalletTransaction, String> txDateColumn;
     @FXML
     private TableColumn<WalletTransaction, String> txAmountColumn;
     @FXML
-    private TableColumn<WalletTransaction, String> txStateColumn;
+    private TableColumn<WalletTransaction, String> txLabelColumn;
     @FXML
     private TextField sendAddress;
     @FXML
@@ -157,9 +152,10 @@ public class MainController {
             final NetworkParameters params = transaction.getParams();
             return new SimpleStringProperty(getNetworkName(params));
         });
-        txDateColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, Date> param) -> {
+        txDateColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
             final WalletTransaction transaction = param.getValue();
-            return new SimpleObjectProperty(transaction.getTransaction().getUpdateTime());
+            final DateFormat dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT);
+            return new SimpleStringProperty(dateFormat.format(transaction.getTransaction().getUpdateTime()));
         });
         txAmountColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
             final WalletTransaction transaction = param.getValue();
@@ -169,19 +165,12 @@ public class MainController {
         receiveSelector.setConverter(new WalletToNetworkNameConvertor());
         sendSelector.setConverter(receiveSelector.getConverter());
 
-        NetworkParameters bitcoinParams = networksByName.get("Bitcoin");
-        NetworkParameters bitcoinTestParams = networksByName.get("Bitcoin test");
         NetworkParameters dogecoinParams = networksByName.get("Dogecoin");
         NetworkParameters dogecoinTestParams = networksByName.get("Dogecoin test");
 
-        /* newWallet(bitcoinParams);
-        newWallet(bitcoinTestParams); */
         networks.add(new Network(dogecoinParams, this));
         networks.add(new Network(dogecoinTestParams, this));
-
-        for (Network network: networks) {
-            network.run();
-        }
+        networks.stream().forEach((network) -> { network.start(); });
 
         receiveSelector.setOnAction((ActionEvent event) -> {
             if (event.getTarget().equals(receiveSelector)) {
@@ -193,64 +182,77 @@ public class MainController {
             }
         });
 
-        sendButton.setOnAction((ActionEvent event) -> {
-            final Address address;
-            final Coin amount;
-            final Wallet wallet = sendSelector.getValue();
+        sendButton.setOnAction((ActionEvent event) -> { sendCoinsOnUIThread(); });
+    }
 
-            try {
-                address = Address.fromBase58(wallet.getNetworkParameters(), sendAddress.getText());
-            } catch(AddressFormatException ex) {
-                Alert alert = new Alert(Alert.AlertType.ERROR, "The provided address is invalid: "
+    private void sendCoinsOnUIThread() {
+        final Address address;
+        final Coin amount;
+        final Wallet wallet = sendSelector.getValue();
+        
+        try {
+            address = Address.fromBase58(wallet.getNetworkParameters(), sendAddress.getText());
+        } catch(AddressFormatException ex) {
+            Alert alert = new Alert(Alert.AlertType.ERROR, "The provided address is invalid: "
                     + ex.getMessage());
-                alert.setTitle("Address Incorrect");
-                alert.showAndWait();
-                return;
-            }
-
-            try {
-                amount = Coin.parseCoin(sendAmount.getText());
-            } catch(IllegalArgumentException ex) {
-                Alert alert = new Alert(Alert.AlertType.ERROR, "The number of coins to send is invalid: "
+            alert.setTitle("Address Incorrect");
+            alert.showAndWait();
+            return;
+        }
+        
+        try {
+            amount = Coin.parseCoin(sendAmount.getText());
+        } catch(IllegalArgumentException ex) {
+            Alert alert = new Alert(Alert.AlertType.ERROR, "The number of coins to send is invalid: "
                     + ex.getMessage());
-                alert.setTitle("Amount Incorrect");
-                alert.showAndWait();
-                return;
-            }
-
-            // TODO: Calculate fees in a network-appropriate way
-            SendRequest req = SendRequest.to(address, amount);
-            try {
-                // Wondering if we should have all wallet interaction on a per-network
-                // thread, and therefore this should be going via the network bridge.
-                wallet.sendCoins(req);
-            } catch (InsufficientMoneyException e) {
-                Alert alert = new Alert(Alert.AlertType.ERROR);
-                alert.setTitle("Insufficient Money");
-                alert.setHeaderText("You don't have enough money!");
-                alert.setContentText("You need "
+            alert.setTitle("Amount Incorrect");
+            alert.showAndWait();
+            return;
+        }
+        
+        // TODO: Show a confirmation dialogue
+        // TODO: Pass the send request over to the network thread
+        // TODO: Calculate fees in a network-appropriate way
+        final SendRequest req = SendRequest.to(address, amount);
+        try {
+            wallet.sendCoins(req);
+        } catch (InsufficientMoneyException e) {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Insufficient Money");
+            alert.setHeaderText("You don't have enough money!");
+            alert.setContentText("You need "
                     + (e.missing == null
-                        ? "an unknown amount"
-                        : wallet.getParams().getMonetaryFormat().format(e.missing))
+                            ? "an unknown amount"
+                            : wallet.getParams().getMonetaryFormat().format(e.missing))
                     + " more");
-
-                alert.showAndWait();
-                return;
-            }
-        });
+            
+            alert.showAndWait();
+            return;
+        }
     }
 
     public List<Service> stop() {
         final List<Service> services = new ArrayList<>(networks.size());
+        final List<Network> stuckNetworks = new ArrayList<>();
 
-        for (Network bridge: networks) {
-            services.add(bridge.getKit().stopAsync());
+        // Tell all the networks to shut down
+        networks.stream().forEach((network) -> { services.add(network.cancel()); });
+
+        // Try joining all the thread, note which we fail on
+        for (Network network: networks) {
             try {
-                bridge.join();
-            } catch(InterruptedException ex) {
-                // TODO: Log
-                // Ignore and move on to the next thread
+                network.join(Network.POLL_INTERVAL_MILLIS * 2, 0);
+            } catch (InterruptedException ex) {
+                // Ignore
             }
+            if (network.isAlive()) {
+                stuckNetworks.add(network);
+            }
+        }
+
+        if (!stuckNetworks.isEmpty()) {
+            // Interrupt any networks that are still running
+            stuckNetworks.stream().forEach((network) -> { network.interrupt(); });
         }
 
         return services;
@@ -267,6 +269,7 @@ public class MainController {
     }
 
     /**
+     * @param params network parameters to look up name for.
      * @return the name of a network
      */
     public static String getNetworkName(final NetworkParameters params) {
@@ -274,9 +277,53 @@ public class MainController {
     }
 
     /**
-     * Register a wallet to be tracked by this controller.
+     * Register a wallet to be tracked by this controller. This recalculates
+     * wallet transactions, which is a long running task, and must be run on a
+     * background thread.
      */
     public void registerWallet(Wallet wallet) {
+        // We rebuild the transactions on the current thread, rather than slowing
+        // down the UI thread, and so keep a temporary copy to be pushed into the
+        // main transaction list later.
+        final List<WalletTransaction> tempTransactions = new ArrayList<>();
+
+        // Pre-sort transactions by date
+        final SortedSet<Transaction> rawTransactions = new TreeSet<>(
+            (Transaction a, Transaction b) -> a.getUpdateTime().compareTo(b.getUpdateTime())
+        );
+        rawTransactions.addAll(wallet.getTransactions(false));
+
+        final Map<TransactionOutPoint, Coin> balances = new HashMap<>();
+        // TODO: Should get the value change or information on relevant outputs
+        // or something more useful form Wallet
+        // Meanwhile we do a bunch of duplicate work to recalculate these values,
+        // here
+        for (Transaction tx: rawTransactions) {
+            long valueChange = 0;
+            for (TransactionInput in: tx.getInputs()) {
+                Coin balance = balances.get(in.getOutpoint());
+                // Spend the value on the listed input
+                if (balance != null) {
+                    valueChange -= balance.value;
+                    balances.remove(in.getOutpoint());
+                }
+            }
+            for (TransactionOutput out: tx.getOutputs()) {
+                if (out.isMine(wallet)) {
+                    valueChange += out.getValue().value;
+                    Coin balance = balances.get(out.getOutPointFor());
+                    if (balance == null) {
+                        balance = out.getValue();
+                    } else {
+                        balance.add(out.getValue());
+                    }
+                    balances.put(out.getOutPointFor(), balance);
+                }
+            }
+            tempTransactions.add(new WalletTransaction(wallet.getParams(), tx, Coin.valueOf(valueChange)));
+        }
+
+        Collections.reverse(tempTransactions);
         Platform.runLater(() -> {
             this.wallets.add(wallet);
             if (this.wallets.size() == 1) {
@@ -285,41 +332,7 @@ public class MainController {
                 this.sendSelector.setValue(wallet);
             }
 
-            // Pre-sort transactions by date
-            final SortedSet<Transaction> rawTransactions = new TreeSet<Transaction>(
-                (Transaction a, Transaction b) -> a.getUpdateTime().compareTo(b.getUpdateTime())
-            );
-            rawTransactions.addAll(wallet.getTransactions(false));
-
-            final Map<TransactionOutPoint, Coin> balances = new HashMap<>();
-            // TODO: Should get the value change or information on relevant outputs
-            // or something more useful form Wallet
-            // Meanwhile we do a bunch of duplicate work to recalculate these values,
-            // here
-            for (Transaction tx: rawTransactions) {
-                long valueChange = 0;
-                for (TransactionInput in: tx.getInputs()) {
-                    Coin balance = balances.get(in.getOutpoint());
-                    // Spend the value on the listed input
-                    if (balance != null) {
-                        valueChange -= balance.value;
-                        balances.remove(in.getOutpoint());
-                    }
-                }
-                for (TransactionOutput out: tx.getOutputs()) {
-                    if (out.isMine(wallet)) {
-                        valueChange += out.getValue().value;
-                        Coin balance = balances.get(out.getOutPointFor());
-                        if (balance == null) {
-                            balance = out.getValue();
-                        } else {
-                            balance.add(out.getValue());
-                        }
-                        balances.put(out.getOutPointFor(), balance);
-                    }
-                }
-                transactions.add(new WalletTransaction(wallet.getParams(), tx, Coin.valueOf(valueChange)));
-            }
+            transactions.addAll(tempTransactions);
         });
     }
 

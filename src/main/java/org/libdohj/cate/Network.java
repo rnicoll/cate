@@ -15,9 +15,12 @@
  */
 package org.libdohj.cate;
 
+import com.google.common.util.concurrent.Service;
 import java.io.File;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,6 +28,7 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 
+import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.FilteredBlock;
@@ -47,10 +51,21 @@ import org.libdohj.cate.controller.MainController;
  * to.
  */
 public class Network extends Thread implements PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+    /**
+     * Interval between checking of the network has been told to shut down.
+     */
+    public static final long POLL_INTERVAL_MILLIS = 250;
+    private static final int WORK_QUEUE_SIZE = 20;
+
     private final NetworkParameters params;
     private WalletAppKit kit;
     private boolean synced = false;
     private final MainController controller;
+
+    /** Work queue for the thread once the kit has been started */
+    private final ArrayBlockingQueue<AbstractWork> workQueue = new ArrayBlockingQueue<>(WORK_QUEUE_SIZE);
+    private boolean cancelled = false;
+
     private final SimpleObjectProperty<String> balance = new SimpleObjectProperty<>("0");
     private final SimpleIntegerProperty blocks = new SimpleIntegerProperty(0);
     private final SimpleIntegerProperty blocksLeft = new SimpleIntegerProperty(0);
@@ -115,6 +130,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     public void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
         controller.addTransaction(params, tx, prevBalance, newBalance);
         balance.set(newBalance.toPlainString());
+        // TODO: Update the displayed receive address
     }
 
     /**
@@ -153,19 +169,55 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
                 peerGroup().addDataEventListener(Network.this);
                 peerGroup().addConnectionEventListener(Network.this);
                 wallet().addCoinEventListener(Network.this);
-                controller.registerWallet(wallet());
-                try {
-                    blocks.set(store().getChainHead().getHeight());
-                } catch (BlockStoreException ex) {
-                    // TODO: Log
-                    System.err.println(ex.toString());
-                    ex.printStackTrace();
-                }
-                balance.set(wallet().getBalance().toPlainString());
+                Network.this.workQueue.offer(new RegisterWallet());
             }
         };
         kit.setAutoStop(false);
         kit.setBlockingStartup(false);
         kit.startAsync();
+
+        while (!cancelled) {
+            final AbstractWork work;
+            try {
+                work = Network.this.workQueue.poll(POLL_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+            } catch(InterruptedException ex) {
+                // Loop around to test for cancelled state again automatically
+                continue;
+            }
+            if (null != work) {
+                work.run();
+            }
+        }
+    }
+
+    /**
+     * Cancel the network task. This does not interrupt the thread, but instead
+     * relies on timeouts to ensure the cancellation is seen quickly.
+     * 
+     * @return the stopped kit service.
+     */
+    public Service cancel() {
+        final Service service = kit.stopAsync();
+        this.cancelled = true;
+        return service;
+    }
+
+    private abstract class AbstractWork implements Runnable {
+        
+    }
+
+    private class RegisterWallet extends AbstractWork {
+        @Override
+        public void run() {
+            controller.registerWallet(Network.this.getKit().wallet());
+            try {
+                blocks.set(Network.this.getKit().store().getChainHead().getHeight());
+            } catch (BlockStoreException ex) {
+                // TODO: Log
+                System.err.println(ex.toString());
+                ex.printStackTrace();
+            }
+            balance.set(Network.this.getKit().wallet().getBalance().toPlainString());
+        }
     }
 }
