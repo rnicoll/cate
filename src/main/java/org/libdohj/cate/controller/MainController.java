@@ -15,9 +15,10 @@
  */
 package org.libdohj.cate.controller;
 
-import org.libdohj.cate.Network;
-
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.text.DateFormat;
+import java.util.concurrent.TimeUnit;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,25 +36,27 @@ import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.Node;
 import javafx.util.StringConverter;
 
+
+import org.libdohj.cate.Network;
 import com.google.common.util.concurrent.Service;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.InsufficientMoneyException;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutPoint;
 import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
-import org.bitcoinj.core.Wallet.SendRequest;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.libdohj.params.DogecoinMainNetParams;
@@ -67,6 +70,8 @@ import org.libdohj.params.LitecoinMainNetParams;
  * @author Ross Nicoll
  */
 public class MainController {
+    private static final int NETWORK_PUSH_TIMEOUT_MILLIS = 500;
+
     private static final LinkedHashMap<NetworkParameters, String> networkNames = new LinkedHashMap<>();
     private static final LinkedHashMap<String, NetworkParameters> networksByName = new LinkedHashMap<>();
 
@@ -119,6 +124,7 @@ public class MainController {
     private final ObservableList<Network> networks = FXCollections.observableArrayList();
     private final ObservableList<Wallet> wallets = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
+    private final Map<Wallet, Network> walletNetworks = new HashMap<>();
 
     @FXML
     public void initialize() {
@@ -182,10 +188,28 @@ public class MainController {
             }
         });
 
-        sendButton.setOnAction((ActionEvent event) -> { sendCoinsOnUIThread(); });
+        sendButton.setOnAction((ActionEvent event) -> { sendCoinsOnUIThread(event); });
     }
 
-    private void sendCoinsOnUIThread() {
+    /**
+     * Add a transaction to those displayed by this controller.
+     *
+     * @param params network parameters for the network the transaction is from.
+     * @param tx the underlying transaction to add.
+     * @param prevBalance previous wallet balance.
+     * @param newBalance new wallet balance.
+     */
+    public void addTransaction(NetworkParameters params, Transaction tx, Coin prevBalance, Coin newBalance) {
+        // TODO: Transaction lists should be aggregated from listed held by each
+        // network.
+        // For now we do the actual modification on the UI thread to avoid
+        // race conditions
+        Platform.runLater(() -> {
+            transactions.add(new WalletTransaction(params, tx, newBalance.subtract(prevBalance)));
+        });
+    }
+
+    private void sendCoinsOnUIThread(ActionEvent event) {
         final Address address;
         final Coin amount;
         final Wallet wallet = sendSelector.getValue();
@@ -209,63 +233,52 @@ public class MainController {
             alert.showAndWait();
             return;
         }
-        
-        // TODO: Show a confirmation dialogue
-        // TODO: Pass the send request over to the network thread
-        // TODO: Calculate fees in a network-appropriate way
-        final SendRequest req = SendRequest.to(address, amount);
+
+        final Alert confirmSend = new Alert(Alert.AlertType.CONFIRMATION);
+
+        // TODO: Show details of fees and total including fees
+        confirmSend.setTitle("Confirm Sending Coins");
+        confirmSend.setHeaderText("Send "
+            + wallet.getParams().getMonetaryFormat().format(amount) + " to "
+            + address.toBase58() + "?");
+        confirmSend.setContentText("You are about to send "
+            + wallet.getParams().getMonetaryFormat().format(amount) + " to "
+            + address.toBase58());
+        confirmSend.initOwner(((Node)event.getTarget()).getScene().getWindow());
+
+        confirmSend.showAndWait()
+            .filter(response -> response == ButtonType.OK)
+            .ifPresent(response -> doSendCoins(walletNetworks.get(wallet), address, amount));
+    }
+
+    /**
+     * Actually send coins, once the user has confirmed.
+     *
+     * @param network the network to send coins over.
+     * @param address the recipient address to send coins to.
+     * @param amount the amount of coins to send.
+     */
+    private void doSendCoins(final Network network, final Address address, final Coin amount) {
         try {
-            wallet.sendCoins(req);
-        } catch (InsufficientMoneyException e) {
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Insufficient Money");
-            alert.setHeaderText("You don't have enough money!");
-            alert.setContentText("You need "
-                    + (e.missing == null
-                            ? "an unknown amount"
-                            : wallet.getParams().getMonetaryFormat().format(e.missing))
-                    + " more");
-            
-            alert.showAndWait();
-            return;
+            network.sendCoins(address, amount, (Wallet.SendResult sendResult) -> {
+            }, (final Coin missing) -> {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Insufficient Money");
+                    alert.setHeaderText("You don't have enough money!");
+                    alert.setContentText("You need "
+                            + (missing == null
+                                    ? "an unknown amount"
+                                    : network.format(missing))
+                            + " more");
+
+                    alert.showAndWait();
+                });
+            }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ex) {
+            // TODO: Now what!?
+            Logger.getLogger(MainController.class.getName()).log(Level.SEVERE, null, ex);
         }
-    }
-
-    public List<Service> stop() {
-        final List<Service> services = new ArrayList<>(networks.size());
-        final List<Network> stuckNetworks = new ArrayList<>();
-
-        // Tell all the networks to shut down
-        networks.stream().forEach((network) -> { services.add(network.cancel()); });
-
-        // Try joining all the thread, note which we fail on
-        for (Network network: networks) {
-            try {
-                network.join(Network.POLL_INTERVAL_MILLIS * 2, 0);
-            } catch (InterruptedException ex) {
-                // Ignore
-            }
-            if (network.isAlive()) {
-                stuckNetworks.add(network);
-            }
-        }
-
-        if (!stuckNetworks.isEmpty()) {
-            // Interrupt any networks that are still running
-            stuckNetworks.stream().forEach((network) -> { network.interrupt(); });
-        }
-
-        return services;
-    }
-
-    public void addTransaction(NetworkParameters params, Transaction tx, Coin prevBalance, Coin newBalance) {
-        // TODO: Transaction lists should be aggregated from listed held by each
-        // network.
-        // For now we do the actual modification on the UI thread to avoid
-        // race conditions
-        Platform.runLater(() -> {
-            transactions.add(new WalletTransaction(params, tx, newBalance.subtract(prevBalance)));
-        });
     }
 
     /**
@@ -281,7 +294,7 @@ public class MainController {
      * wallet transactions, which is a long running task, and must be run on a
      * background thread.
      */
-    public void registerWallet(Wallet wallet) {
+    public void registerWallet(final Network network, final Wallet wallet) {
         // We rebuild the transactions on the current thread, rather than slowing
         // down the UI thread, and so keep a temporary copy to be pushed into the
         // main transaction list later.
@@ -334,6 +347,41 @@ public class MainController {
 
             transactions.addAll(tempTransactions);
         });
+
+        walletNetworks.put(wallet, network);
+    }
+
+    /**
+     * Stops the controller, which includes shutting down the various networks
+     * it is managing.
+     *
+     * @return a list of services which have been notified to stop.
+     */
+    public List<Service> stop() {
+        final List<Service> services = new ArrayList<>(networks.size());
+        final List<Network> stuckNetworks = new ArrayList<>();
+
+        // Tell all the networks to shut down
+        networks.stream().forEach((network) -> { services.add(network.cancel()); });
+
+        // Try joining all the thread, note which we fail on
+        for (Network network: networks) {
+            try {
+                network.join(Network.POLL_INTERVAL_MILLIS * 2, 0);
+            } catch (InterruptedException ex) {
+                // Ignore
+            }
+            if (network.isAlive()) {
+                stuckNetworks.add(network);
+            }
+        }
+
+        if (!stuckNetworks.isEmpty()) {
+            // Interrupt any networks that are still running
+            stuckNetworks.stream().forEach((network) -> { network.interrupt(); });
+        }
+
+        return services;
     }
 
     private class WalletToNetworkNameConvertor extends StringConverter<Wallet> {

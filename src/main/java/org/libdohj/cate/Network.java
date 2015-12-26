@@ -27,18 +27,21 @@ import java.util.logging.Logger;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
-
+import javafx.util.Callback;
 import org.bitcoinj.core.Address;
+
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.FilteredBlock;
 import org.bitcoinj.core.GetDataMessage;
+import org.bitcoinj.core.InsufficientMoneyException;
 import org.bitcoinj.core.Message;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Peer;
 import org.bitcoinj.core.PeerAddress;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.Wallet;
+import org.bitcoinj.core.Wallet.SendResult;
 import org.bitcoinj.core.listeners.PeerConnectionEventListener;
 import org.bitcoinj.core.listeners.PeerDataEventListener;
 import org.bitcoinj.core.listeners.WalletCoinEventListener;
@@ -122,12 +125,14 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
 
     @Override
     public void onCoinsReceived(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
+        // TODO: Don't register coins that send to a change address, twice
         controller.addTransaction(params, tx, prevBalance, newBalance);
         balance.set(newBalance.toPlainString());
     }
 
     @Override
     public void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
+        // TODO: Don't register coins that send to a change address, twice
         controller.addTransaction(params, tx, prevBalance, newBalance);
         balance.set(newBalance.toPlainString());
         // TODO: Update the displayed receive address
@@ -202,6 +207,54 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
         return service;
     }
 
+    /**
+     * Format a coin amount.
+     */
+    public CharSequence format(Coin amount) {
+        return params.getMonetaryFormat().format(amount);
+    }
+
+    /**
+     * Queue a request to send coins to the given address. This returns immediately,
+     * as the actual work is done on the network thread in order to ensure the
+     * thread context is correct.
+     * 
+     * @param address the recipient address to send coins to.
+     * @param amount the amount of coins to send.
+     * @param onSuccess handler to be called on success
+     * @param onInsufficientFunds handler to be called if the user lacks sufficient funds
+     * @param timeout timeout on queueing the work request
+     * @param timeUnit time unit for the timeout
+     */
+    public void sendCoins(final Address address, final Coin amount,
+                          final SendSuccessHandler onSuccess,
+                          final SendInsufficientFundsHandler onInsufficientFunds,
+                          final long timeout, final TimeUnit timeUnit)
+            throws InterruptedException {
+        this.workQueue.offer(new SendCoins(address, amount, onSuccess, onInsufficientFunds),
+            timeout, timeUnit);
+    }
+
+    /**
+     * Interface for handling the case where the user tries to send funds without
+     * enough in the wallet to cover it.
+     */
+    public interface SendInsufficientFundsHandler {
+        /**
+         * Called when the user tries to send funds without enough in the wallet
+         * to cover it. Will be called on the network thread.
+         */
+        public void onInsufficientFunds(Coin missing);
+    }
+
+    public interface SendSuccessHandler {
+        /**
+         * Called when a send transaction is generated successfully.
+         * Will be called on the network thread.
+         */
+        public void onSuccess(SendResult sendResult);
+    }
+
     private abstract class AbstractWork implements Runnable {
         
     }
@@ -209,7 +262,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     private class RegisterWallet extends AbstractWork {
         @Override
         public void run() {
-            controller.registerWallet(Network.this.getKit().wallet());
+            controller.registerWallet(Network.this, Network.this.getKit().wallet());
             try {
                 blocks.set(Network.this.getKit().store().getChainHead().getHeight());
             } catch (BlockStoreException ex) {
@@ -218,6 +271,36 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
                 ex.printStackTrace();
             }
             balance.set(Network.this.getKit().wallet().getBalance().toPlainString());
+        }
+    }
+
+    private class SendCoins extends AbstractWork {
+        private final SendSuccessHandler onSuccess;
+        private final SendInsufficientFundsHandler onInsufficientFunds;
+        private final Address address;
+        private final Coin amount;
+
+        private SendCoins(final Address address, final Coin amount,
+                          final SendSuccessHandler onSuccess,
+                          final SendInsufficientFundsHandler onInsufficientFunds) {
+            this.address = address;
+            this.amount = amount;
+            this.onSuccess = onSuccess;
+            this.onInsufficientFunds = onInsufficientFunds;
+        }
+
+        @Override
+        public void run() {
+            // TODO: Calculate fees in a network-appropriate way
+            final Wallet.SendRequest req = Wallet.SendRequest.to(address, amount);
+            final SendResult result;
+            try {
+                result = Network.this.getKit().wallet().sendCoins(req);
+            } catch (InsufficientMoneyException ex) {
+                onInsufficientFunds.onInsufficientFunds(ex.missing);
+                return;
+            }
+            onSuccess.onSuccess(result);
         }
     }
 }
