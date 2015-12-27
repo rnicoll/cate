@@ -46,10 +46,17 @@ import javafx.scene.Node;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Optional;
 import javafx.beans.binding.Bindings;
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Label;
 import javafx.scene.control.TableRow;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextInputDialog;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.Priority;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
@@ -60,6 +67,7 @@ import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutPoint;
 import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
+import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.libdohj.params.DogecoinMainNetParams;
@@ -67,6 +75,7 @@ import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.LitecoinMainNetParams;
 
 import org.libdohj.cate.Network;
+import org.spongycastle.crypto.params.KeyParameter;
 
 /**
  * Base window from which the rest of CATE is launched. Lists any active
@@ -133,6 +142,7 @@ public class MainController {
     private final ObservableList<Wallet> wallets = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
     private final Map<Wallet, Network> walletNetworks = new HashMap<>();
+    private Logger logger = Logger.getLogger(MainController.class.getName());
 
     @FXML
     public void initialize() {
@@ -279,7 +289,7 @@ public class MainController {
                 }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             } catch (InterruptedException ex) {
                 // TODO: Now what!?
-                Logger.getLogger(MainController.class.getName()).log(Level.SEVERE, null, ex);
+                logger.log(Level.SEVERE, null, ex);
             }
         });
     }
@@ -323,7 +333,7 @@ public class MainController {
                 }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             } catch (InterruptedException ex) {
                 // TODO: Now what!?
-                Logger.getLogger(MainController.class.getName()).log(Level.SEVERE, null, ex);
+                logger.log(Level.SEVERE, null, ex);
             }
         });
     }
@@ -335,10 +345,10 @@ public class MainController {
     private void sendCoinsOnUIThread(ActionEvent event) {
         final Address address;
         final Coin amount;
-        final Wallet wallet = sendSelector.getValue();
+        final Network network = walletNetworks.get(sendSelector.getValue());
         
         try {
-            address = Address.fromBase58(wallet.getNetworkParameters(), sendAddress.getText());
+            address = Address.fromBase58(network.getParams(), sendAddress.getText());
         } catch(AddressFormatException ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR, "The provided address is invalid: "
                     + ex.getMessage());
@@ -360,19 +370,18 @@ public class MainController {
         final Alert confirmSend = new Alert(Alert.AlertType.CONFIRMATION);
 
         // TODO: Show details of fees and total including fees
-        // TODO: Prompt for password if the wallet is encrypted
         confirmSend.setTitle("Confirm Sending Coins");
         confirmSend.setHeaderText("Send "
-            + wallet.getParams().getMonetaryFormat().format(amount) + " to "
+            + network.getParams().getMonetaryFormat().format(amount) + " to "
             + address.toBase58() + "?");
         confirmSend.setContentText("You are about to send "
-            + wallet.getParams().getMonetaryFormat().format(amount) + " to "
+            + network.getParams().getMonetaryFormat().format(amount) + " to "
             + address.toBase58());
         confirmSend.initOwner(((Node)event.getTarget()).getScene().getWindow());
 
         confirmSend.showAndWait()
             .filter(response -> response == ButtonType.OK)
-            .ifPresent(response -> doSendCoins(walletNetworks.get(wallet), address, amount));
+            .ifPresent(response -> doSendCoins(network, address, amount));
     }
 
     /**
@@ -383,11 +392,27 @@ public class MainController {
      * @param amount the amount of coins to send.
      */
     private void doSendCoins(final Network network, final Address address, final Coin amount) {
+        final Wallet.SendRequest req = Wallet.SendRequest.to(address, amount);
+
+        // Prompt for password if the wallet is encrypted
+        // TODO: Should have an unlock() method we call here,
+        // and uses cached password for ~5 minutes, rather than prompting every
+        // time
+        if (network.getObservableEncryptedState().getValue()) {
+            req.aesKey = getAESKeyFromUser(network);
+            if (req.aesKey == null) {
+                // No key available, which means the user hit cancel
+                return;
+            }
+        }
+
         try {
-            network.sendCoins(address, amount, (Wallet.SendResult sendResult) -> {
-            }, (final Coin missing) -> {
+            network.sendCoins(req,
+            (Wallet.SendResult sendResult) -> {
+                // TODO: Can we do a "toast" pop up of some kind here?
+            }, (Coin missing) -> {
                 Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    Alert alert = new Alert(Alert.AlertType.WARNING);
                     alert.setTitle("Insufficient Money");
                     alert.setHeaderText("You don't have enough money!");
                     alert.setContentText("You need "
@@ -398,10 +423,36 @@ public class MainController {
 
                     alert.showAndWait();
                 });
+            }, (KeyCrypterException ex) -> {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.WARNING);
+                    alert.setTitle("Wallet Locked");
+                    alert.setHeaderText("Could Not Unlock Wallet");
+                    alert.setContentText("The provided password did not unlock the wallet, please try again");
+                    alert.showAndWait();
+                });
+            }, (Exception ex) -> {
+                logger.log(Level.SEVERE, ex.getMessage(), ex);
+                showInternalError(ex);
             }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
             // TODO: Now what!?
-            Logger.getLogger(MainController.class.getName()).log(Level.SEVERE, null, ex);
+            logger.log(Level.SEVERE, null, ex);
+        }
+    }
+
+    private KeyParameter getAESKeyFromUser(final Network network) {
+        // TODO: Cache the key for ~5 minutes
+
+        // I don't like that we have to hold the password as a string, so we
+        // can't wipe the values once we're done.
+        final TextInputDialog passwordDialog = new TextInputDialog("");
+        passwordDialog.setContentText("Please enter the wallet password to unlock it.");
+        final Optional<String> password = passwordDialog.showAndWait();
+        if (password.isPresent()) {
+            return network.getKeyFromPassword(password.get());
+        } else {
+            return null;
         }
     }
 
@@ -506,6 +557,14 @@ public class MainController {
         }
 
         return services;
+    }
+
+    private void showInternalError(Exception ex) {
+        Platform.runLater(() -> {Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Internal Error");
+            alert.setContentText(ex.getMessage());
+            alert.showAndWait();
+        });
     }
 
     private class WalletToNetworkNameConvertor extends StringConverter<Wallet> {

@@ -28,6 +28,7 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 import com.google.common.util.concurrent.Service;
+import java.util.Arrays;
 import java.util.HashSet;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.value.ObservableBooleanValue;
@@ -49,9 +50,11 @@ import org.bitcoinj.core.listeners.PeerConnectionEventListener;
 import org.bitcoinj.core.listeners.PeerDataEventListener;
 import org.bitcoinj.core.listeners.WalletCoinEventListener;
 import org.bitcoinj.crypto.KeyCrypterException;
+import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.store.BlockStoreException;
 import org.libdohj.cate.controller.MainController;
+import org.spongycastle.crypto.params.KeyParameter;
 
 /**
  * Class which manages incoming events and knows which network they apply
@@ -75,6 +78,9 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     private WalletAppKit kit;
     private boolean synced = false;
     private final MainController controller;
+
+    /** Crypter used to convert wallet passwords to AES keys */
+    private final KeyCrypterScrypt keyCrypter = new KeyCrypterScrypt();
 
     /** Work queue for the thread once the kit has been started */
     private final ArrayBlockingQueue<Work> workQueue = new ArrayBlockingQueue<>(WORK_QUEUE_SIZE);
@@ -191,6 +197,13 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
         return params;
     }
 
+    /**
+     * Converts a password to an AES key.
+     */
+    public KeyParameter getKeyFromPassword(String password) {
+        return keyCrypter.deriveKey(password);
+    }
+
     @Override
     public void run() {
         kit = new WalletAppKit(params, new File("."), "cate_" + params.getId()) {
@@ -272,7 +285,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
                 onError.accept(new WalletNotEncryptedException());
             } else {
                 try {
-                    kit.wallet().decrypt(password);
+                    kit.wallet().decrypt(keyCrypter.deriveKey(password));
                     encrypted.set(false);
                     onSuccess.accept(null);
                 } catch(KeyCrypterException ex) {
@@ -305,7 +318,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
                 onError.accept(new WalletAlreadyEncryptedException());
             } else {
                 try {
-                    kit.wallet().encrypt(password);
+                    kit.wallet().encrypt(keyCrypter, keyCrypter.deriveKey(password));
                     encrypted.set(true);
                     onSuccess.accept(null);
                 } catch(KeyCrypterException ex) {
@@ -322,30 +335,36 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
      * Queue a request to send coins to the given address. This returns immediately,
      * as the actual work is done on the network thread in order to ensure the
      * thread context is correct.
-     * 
-     * @param address the recipient address to send coins to.
-     * @param amount the amount of coins to send.
+     *
      * @param onSuccess handler to be called on success
      * @param onInsufficientFunds handler to be called if the user lacks sufficient funds
      * @param timeout timeout on queueing the work request
      * @param timeUnit time unit for the timeout
      */
-    public void sendCoins(final Address address, final Coin amount,
+    public void sendCoins(final Wallet.SendRequest req,
                           final Consumer<SendResult> onSuccess,
                           final Consumer<Coin> onInsufficientFunds,
+                          final Consumer<KeyCrypterException> onWalletLocked,
+                          final Consumer<Exception> onError,
                           final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
         this.workQueue.offer((Work) () -> {
             // TODO: Calculate fees in a network-appropriate way
-            final Wallet.SendRequest req = Wallet.SendRequest.to(address, amount);
             final SendResult result;
             try {
                 result = Network.this.getKit().wallet().sendCoins(req);
+                onSuccess.accept(result);
             } catch (InsufficientMoneyException ex) {
                 onInsufficientFunds.accept(ex.missing);
-                return;
+            } catch(KeyCrypterException ex) {
+                onWalletLocked.accept(ex);
+            } catch(Exception ex) {
+                onError.accept(ex);
+            } finally {
+                // Wipe the key to ensure if it's stored in insecure memory, it's all
+                // zeroes on disk
+                Arrays.fill(req.aesKey.getKey(), (byte) 0);
             }
-            onSuccess.accept(result);
         });
     }
 
