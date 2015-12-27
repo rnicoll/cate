@@ -74,6 +74,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     public static final long POLL_INTERVAL_MILLIS = 250;
     private static final int WORK_QUEUE_SIZE = 20;
 
+    private final File dataDir;
     private final NetworkParameters params;
     private WalletAppKit kit;
     private boolean synced = false;
@@ -100,9 +101,10 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
      */
     private Set<Transaction> seenTransactions = new HashSet<>();
 
-    public Network(NetworkParameters params, final MainController controller) {
+    public Network(NetworkParameters params, final MainController controller, final File dataDir) {
         this.controller = controller;
         this.params = params;
+        this.dataDir = dataDir;
     }
 
     @Override
@@ -206,7 +208,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
 
     @Override
     public void run() {
-        kit = new WalletAppKit(params, new File("."), "cate_" + params.getId()) {
+        kit = new WalletAppKit(params, dataDir, "cate_" + params.getId()) {
             @Override
             protected void onSetupCompleted() {
                 peerGroup().setConnectTimeoutMillis(1000);
@@ -336,6 +338,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
      * as the actual work is done on the network thread in order to ensure the
      * thread context is correct.
      *
+     * @param req the send coin request to pass to the wallet
      * @param onSuccess handler to be called on success
      * @param onInsufficientFunds handler to be called if the user lacks sufficient funds
      * @param timeout timeout on queueing the work request

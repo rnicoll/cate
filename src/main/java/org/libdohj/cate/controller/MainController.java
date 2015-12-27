@@ -15,18 +15,20 @@
  */
 package org.libdohj.cate.controller;
 
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.io.File;
 import java.text.DateFormat;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
 
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
@@ -37,26 +39,20 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.TextInputDialog;
 import javafx.scene.Node;
 import javafx.util.StringConverter;
 
+
 import com.google.common.util.concurrent.Service;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.Optional;
-import javafx.beans.binding.Bindings;
-import javafx.scene.control.ContextMenu;
-import javafx.scene.control.Label;
-import javafx.scene.control.TableRow;
-import javafx.scene.control.TextArea;
-import javafx.scene.control.TextInputDialog;
-import javafx.scene.layout.GridPane;
-import javafx.scene.layout.Priority;
+import org.spongycastle.crypto.params.KeyParameter;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
@@ -70,12 +66,13 @@ import org.bitcoinj.core.Wallet;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
+import org.libdohj.cate.CATE;
+
 import org.libdohj.params.DogecoinMainNetParams;
 import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.LitecoinMainNetParams;
 
 import org.libdohj.cate.Network;
-import org.spongycastle.crypto.params.KeyParameter;
 
 /**
  * Base window from which the rest of CATE is launched. Lists any active
@@ -142,7 +139,8 @@ public class MainController {
     private final ObservableList<Wallet> wallets = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
     private final Map<Wallet, Network> walletNetworks = new HashMap<>();
-    private Logger logger = Logger.getLogger(MainController.class.getName());
+
+    private static Logger logger = Logger.getLogger(MainController.class.getName());
 
     @FXML
     public void initialize() {
@@ -154,8 +152,8 @@ public class MainController {
         initializeWalletList();
         initializeTransactionList();
 
-        networks.add(new Network(networksByName.get("Dogecoin"), this));
-        networks.add(new Network(networksByName.get("Dogecoin test"), this));
+        networks.add(new Network(networksByName.get("Dogecoin"), this, CATE.getDataDir()));
+        networks.add(new Network(networksByName.get("Dogecoin test"), this, CATE.getDataDir()));
         networks.stream().forEach((network) -> { network.start(); });
 
         receiveSelector.setOnAction((ActionEvent event) -> {
