@@ -28,6 +28,7 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 import com.google.common.util.concurrent.Service;
+import java.util.HashSet;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.value.ObservableBooleanValue;
 
@@ -86,6 +87,13 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     private final SimpleBooleanProperty encrypted = new SimpleBooleanProperty();
     private final SimpleIntegerProperty peerCount = new SimpleIntegerProperty(0);
 
+    /** Transactions we've been notified of, either via onCoinsSent()
+     * or onCoinsReceived(). Used so we can filter out transactions that fire
+     * both events (i.e. a transaction that pays out, but also has change
+     * paying back to us).
+     */
+    private Set<Transaction> seenTransactions = new HashSet<>();
+
     public Network(NetworkParameters params, final MainController controller) {
         this.controller = controller;
         this.params = params;
@@ -137,15 +145,17 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
 
     @Override
     public void onCoinsReceived(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
-        // TODO: Don't register coins that send to a change address, twice
-        controller.addTransaction(params, tx, prevBalance, newBalance);
+        if (seenTransactions.add(tx)) {
+            controller.addTransaction(params, tx, prevBalance, newBalance);
+        }
         balance.set(newBalance.toPlainString());
     }
 
     @Override
     public void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
-        // TODO: Don't register coins that send to a change address, twice
-        controller.addTransaction(params, tx, prevBalance, newBalance);
+        if (seenTransactions.add(tx)) {
+            controller.addTransaction(params, tx, prevBalance, newBalance);
+        }
         balance.set(newBalance.toPlainString());
         // TODO: Update the displayed receive address
     }
