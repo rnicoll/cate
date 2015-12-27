@@ -46,6 +46,9 @@ import javafx.scene.Node;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.TableRow;
+import javafx.scene.control.TextInputDialog;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
@@ -163,39 +166,57 @@ public class MainController {
 
     private void initializeTransactionList() {
         txList.setItems(transactions);
-        txNetworkColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
-            final WalletTransaction transaction = param.getValue();
+        txNetworkColumn.setCellValueFactory(dataFeatures -> {
+            final WalletTransaction transaction = dataFeatures.getValue();
             final NetworkParameters params = transaction.getParams();
             return new SimpleStringProperty(getNetworkName(params));
         });
-        txDateColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
-            final WalletTransaction transaction = param.getValue();
+        txDateColumn.setCellValueFactory(dataFeatures -> {
+            final WalletTransaction transaction = dataFeatures.getValue();
             final DateFormat dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT);
             return new SimpleStringProperty(dateFormat.format(transaction.getTransaction().getUpdateTime()));
         });
-        txAmountColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
-            final WalletTransaction transaction = param.getValue();
+        txAmountColumn.setCellValueFactory(dataFeatures -> {
+            final WalletTransaction transaction = dataFeatures.getValue();
             return new SimpleStringProperty(transaction.getBalanceChange().toPlainString());
         });
     }
 
     private void initializeWalletList() {
         walletList.setItems(networks);
-        networkName.setCellValueFactory((TableColumn.CellDataFeatures<Network, String> param) -> {
-            final Network network = param.getValue();
+        walletList.setRowFactory(view -> {
+            final TableRow<Network> row = new TableRow<>();
+            final ContextMenu rowMenu = new ContextMenu();
+            final MenuItem encryptItem = new MenuItem("Encrypt Wallet");
+            final MenuItem decryptItem = new MenuItem("Decrypt Wallet");
+
+            encryptItem.setOnAction(action -> encryptWalletOnUIThread(row.getItem()));
+            decryptItem.setOnAction(action -> decryptWalletOnUIThread(row.getItem()));
+
+            // TODO: Use separate context menus based on whether the wallet is encrypted or not
+            // and bind to the wallet encryption state
+
+            rowMenu.getItems().addAll(encryptItem, decryptItem);
+
+            // only display context menu for non-null items:
+            row.contextMenuProperty().set(rowMenu);
+            return row;
+        });
+        networkName.setCellValueFactory(dataFeatures -> {
+            final Network network = dataFeatures.getValue();
             final NetworkParameters params = network.getParams();
             return new SimpleStringProperty(getNetworkName(params));
         });
-        networkBalance.setCellValueFactory((TableColumn.CellDataFeatures<Network, String> param) -> {
-            final Network network = param.getValue();
+        networkBalance.setCellValueFactory(dataFeatures -> {
+            final Network network = dataFeatures.getValue();
             return network.getObservableBalance();
         });
-        networkPeers.setCellValueFactory((TableColumn.CellDataFeatures<Network, Number> param) -> {
-            final Network network = param.getValue();
+        networkPeers.setCellValueFactory(dataFeatures -> {
+            final Network network = dataFeatures.getValue();
             return network.getObservablePeerCount();
         });
-        networkBlocks.setCellValueFactory((TableColumn.CellDataFeatures<Network, Number> param) -> {
-            final Network network = param.getValue();
+        networkBlocks.setCellValueFactory(dataFeatures -> {
+            final Network network = dataFeatures.getValue();
             return network.getObservableBlocks();
         });
     }
@@ -218,6 +239,98 @@ public class MainController {
         });
     }
 
+    /**
+     * Prompts the user for the wallet password and then decrypts the underlying
+     * wallet. Shows a warning then takes no further action if the wallet is not
+     * encrypted.
+     */
+    private void decryptWalletOnUIThread(final Network network) {
+        if (!network.isEncrypted()) {
+            Alert alert = new Alert(Alert.AlertType.ERROR, "Cannot decrypt wallet because it is not encrypted.");
+            alert.setTitle("Wallet Is Not Encrypted");
+            alert.showAndWait();
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog();
+        
+        dialog.setTitle("Wallet Password");
+        dialog.setHeaderText("Enter Password to Decrypt");
+        dialog.setContentText("Please enter the wallet password to decrypt the wallet:");
+
+        dialog.showAndWait().ifPresent(value -> {
+            try {
+                network.decrypt(value, o -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                        alert.setTitle("Wallet Decrypted");
+                        alert.setContentText("Wallet successfully decrypted");
+                        alert.showAndWait();
+                    });
+                }, t -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("Wallet Decryption Failed");
+                        // TODO: We really need better error handling
+                        alert.setContentText(t.getMessage());
+                        alert.showAndWait();
+                    });
+                }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException ex) {
+                // TODO: Now what!?
+                Logger.getLogger(MainController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        });
+    }
+
+    /**
+     * Prompts the user for the wallet password and then encrypts the underlying
+     * wallet. If the wallet is already encrypted it changes the encryption key.
+     */
+    private void encryptWalletOnUIThread(final Network network) {
+        if (network.isEncrypted()) {
+            Alert alert = new Alert(Alert.AlertType.ERROR, "Cannot encrypt wallet because it is already encrypted.");
+            alert.setTitle("Wallet Is Encrypted");
+            alert.showAndWait();
+            return;
+        }
+ 
+        TextInputDialog dialog = new TextInputDialog();
+        
+        dialog.setTitle("Wallet Password");
+        dialog.setHeaderText("Enter Password to Encrypt");
+        dialog.setContentText("Please enter the wallet password to encrypt the wallet:");
+
+        // TODO: Confirm the password a second time in case of typos
+        dialog.showAndWait().ifPresent(value -> {
+            try {
+                network.encrypt(value, o -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                        alert.setTitle("Wallet Encrypted");
+                        alert.setContentText("Wallet successfully encrypted");
+                        alert.showAndWait();
+                    });
+                }, t -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("Wallet Encryption Failed");
+                        // TODO: We really need better error handling
+                        alert.setContentText(t.getMessage());
+                        alert.showAndWait();
+                    });
+                }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException ex) {
+                // TODO: Now what!?
+                Logger.getLogger(MainController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        });
+    }
+
+    /**
+     * Take coin values to send from the user interface, prompt the user to
+     * confirm, and then send the coins. MUST be called on the UI thread.
+     */
     private void sendCoinsOnUIThread(ActionEvent event) {
         final Address address;
         final Coin amount;
@@ -246,6 +359,7 @@ public class MainController {
         final Alert confirmSend = new Alert(Alert.AlertType.CONFIRMATION);
 
         // TODO: Show details of fees and total including fees
+        // TODO: Prompt for password if the wallet is encrypted
         confirmSend.setTitle("Confirm Sending Coins");
         confirmSend.setHeaderText("Send "
             + wallet.getParams().getMonetaryFormat().format(amount) + " to "

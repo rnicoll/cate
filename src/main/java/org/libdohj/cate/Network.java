@@ -15,21 +15,22 @@
  */
 package org.libdohj.cate;
 
-import com.google.common.util.concurrent.Service;
 import java.io.File;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
-import javafx.util.Callback;
-import org.bitcoinj.core.Address;
+import com.google.common.util.concurrent.Service;
+import javafx.scene.control.Alert;
 
+import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.FilteredBlock;
@@ -45,6 +46,7 @@ import org.bitcoinj.core.Wallet.SendResult;
 import org.bitcoinj.core.listeners.PeerConnectionEventListener;
 import org.bitcoinj.core.listeners.PeerDataEventListener;
 import org.bitcoinj.core.listeners.WalletCoinEventListener;
+import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.store.BlockStoreException;
 import org.libdohj.cate.controller.MainController;
@@ -215,6 +217,42 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     }
 
     /**
+     * Queue a request to decrypt this wallet. This returns immediately,
+     * as the actual work is done on the network thread in order to ensure the
+     * thread context is correct.
+     * 
+     * @param password password to decrypt the wallet with
+     * @param onSuccess handler to be called on success
+     * @param onError callback in case of an error
+     * @param timeout timeout on queueing the work request
+     * @param timeUnit time unit for the timeout
+     */
+    public void decrypt(String password, Consumer<Object> onSuccess, Consumer<Exception> onError,
+                        final long timeout, final TimeUnit timeUnit)
+            throws InterruptedException {
+        this.workQueue.offer(new DecryptWallet(password, onSuccess, onError),
+            timeout, timeUnit);
+    }
+
+    /**
+     * Queue a request to encrypt this wallet. This returns immediately,
+     * as the actual work is done on the network thread in order to ensure the
+     * thread context is correct.
+     * 
+     * @param password password to encrypt the wallet with
+     * @param onSuccess handler to be called on success
+     * @param onError callback in case of an error
+     * @param timeout timeout on queueing the work request
+     * @param timeUnit time unit for the timeout
+     */
+    public void encrypt(final String password, final Consumer<Object> onSuccess, final Consumer<Exception> onError,
+                        final long timeout, final TimeUnit timeUnit)
+            throws InterruptedException {
+        this.workQueue.offer(new EncryptWallet(password, onSuccess, onError),
+            timeout, timeUnit);
+    }
+
+    /**
      * Queue a request to send coins to the given address. This returns immediately,
      * as the actual work is done on the network thread in order to ensure the
      * thread context is correct.
@@ -227,36 +265,86 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
      * @param timeUnit time unit for the timeout
      */
     public void sendCoins(final Address address, final Coin amount,
-                          final SendSuccessHandler onSuccess,
-                          final SendInsufficientFundsHandler onInsufficientFunds,
+                          final Consumer<SendResult> onSuccess,
+                          final Consumer<Coin> onInsufficientFunds,
                           final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
         this.workQueue.offer(new SendCoins(address, amount, onSuccess, onInsufficientFunds),
             timeout, timeUnit);
     }
 
-    /**
-     * Interface for handling the case where the user tries to send funds without
-     * enough in the wallet to cover it.
-     */
-    public interface SendInsufficientFundsHandler {
-        /**
-         * Called when the user tries to send funds without enough in the wallet
-         * to cover it. Will be called on the network thread.
-         */
-        public void onInsufficientFunds(Coin missing);
+    public boolean isEncrypted() {
+        // TODO: Is this thread safe?
+        return this.kit.wallet().isEncrypted();
     }
 
-    public interface SendSuccessHandler {
-        /**
-         * Called when a send transaction is generated successfully.
-         * Will be called on the network thread.
-         */
-        public void onSuccess(SendResult sendResult);
-    }
+    private static class WalletAlreadyEncryptedException extends Exception { }
+    private static class WalletNotEncryptedException extends Exception { }
 
     private abstract class AbstractWork implements Runnable {
         
+    }
+
+    private class DecryptWallet extends AbstractWork {
+        private final String password;
+        private final Consumer<Object> onSuccess;
+        private final Consumer<Exception> onError;
+
+        private DecryptWallet(final String password, final Consumer<Object> onSuccess,
+                final Consumer<Exception> onError) {
+            this.password = password;
+            this.onSuccess = onSuccess;
+            this.onError = onError;
+        }
+
+        @Override
+        public void run() {
+            final Wallet wallet = kit.wallet();
+            if (!wallet.isEncrypted()) {
+                onError.accept(new WalletNotEncryptedException());
+            } else {
+                try {
+                    kit.wallet().decrypt(password);
+                    onSuccess.accept(null);
+                } catch(KeyCrypterException ex) {
+                    onError.accept(ex);
+                } catch(Exception ex) {
+                    // TODO: Should we have a separate callback for crypter and non-crypter errors?
+                    onError.accept(ex);
+                }
+            }
+        }
+    }
+
+    private class EncryptWallet extends AbstractWork {
+        private final String password;
+        private final Consumer<Object> onSuccess;
+        private final Consumer<Exception> onError;
+
+        private EncryptWallet(final String password, final Consumer<Object> onSuccess,
+                final Consumer<Exception> onError) {
+            this.password = password;
+            this.onSuccess = onSuccess;
+            this.onError = onError;
+        }
+
+        @Override
+        public void run() {
+            final Wallet wallet = kit.wallet();
+            if (wallet.isEncrypted()) {
+                onError.accept(new WalletAlreadyEncryptedException());
+            } else {
+                try {
+                    kit.wallet().encrypt(password);
+                    onSuccess.accept(null);
+                } catch(KeyCrypterException ex) {
+                    onError.accept(ex);
+                } catch(Exception ex) {
+                    // TODO: Should we have a separate callback for crypter and non-crypter errors?
+                    onError.accept(ex);
+                }
+            }
+        }
     }
 
     private class RegisterWallet extends AbstractWork {
@@ -275,14 +363,14 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     }
 
     private class SendCoins extends AbstractWork {
-        private final SendSuccessHandler onSuccess;
-        private final SendInsufficientFundsHandler onInsufficientFunds;
+        private final Consumer<SendResult> onSuccess;
+        private final Consumer<Coin> onInsufficientFunds;
         private final Address address;
         private final Coin amount;
 
         private SendCoins(final Address address, final Coin amount,
-                          final SendSuccessHandler onSuccess,
-                          final SendInsufficientFundsHandler onInsufficientFunds) {
+                          final Consumer<SendResult> onSuccess,
+                          final Consumer<Coin> onInsufficientFunds) {
             this.address = address;
             this.amount = amount;
             this.onSuccess = onSuccess;
@@ -297,10 +385,10 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
             try {
                 result = Network.this.getKit().wallet().sendCoins(req);
             } catch (InsufficientMoneyException ex) {
-                onInsufficientFunds.onInsufficientFunds(ex.missing);
+                onInsufficientFunds.accept(ex.missing);
                 return;
             }
-            onSuccess.onSuccess(result);
+            onSuccess.accept(result);
         }
     }
 }
