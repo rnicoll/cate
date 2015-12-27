@@ -15,6 +15,14 @@
     prefHeight="500.0"    prefWidth="800.0"
     fx:controller="org.libdohj.cate.controller.MainController">
 
+    <top>
+        <MenuBar>
+            <Menu text="File">
+                <MenuItem fx:id="menuExit" text="Quit CATE" />
+            </Menu> 
+        </MenuBar>
+    </top>
+
     <center>
         <VBox>
             <BorderPane.margin>

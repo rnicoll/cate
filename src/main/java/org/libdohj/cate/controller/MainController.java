@@ -38,14 +38,13 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.Node;
 import javafx.util.StringConverter;
 
-
-import org.libdohj.cate.Network;
 import com.google.common.util.concurrent.Service;
 
 import org.bitcoinj.core.Address;
@@ -62,6 +61,8 @@ import org.bitcoinj.params.TestNet3Params;
 import org.libdohj.params.DogecoinMainNetParams;
 import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.LitecoinMainNetParams;
+
+import org.libdohj.cate.Network;
 
 /**
  * Base window from which the rest of CATE is launched. Lists any active
@@ -87,6 +88,9 @@ public class MainController {
             networksByName.put(networkNames.get(params), params);
         }
     }
+
+    @FXML
+    private MenuItem menuExit;
 
     @FXML
     private ComboBox<Wallet> receiveSelector;
@@ -130,10 +134,53 @@ public class MainController {
     public void initialize() {
         receiveSelector.setItems(wallets);
         sendSelector.setItems(wallets);
-        txList.setItems(transactions);
-        walletList.setItems(networks);
+        receiveSelector.setConverter(new WalletToNetworkNameConvertor());
+        sendSelector.setConverter(receiveSelector.getConverter());
 
-        // Set up wallet list rendering
+        initializeWalletList();
+        initializeTransactionList();
+
+        networks.add(new Network(networksByName.get("Dogecoin"), this));
+        networks.add(new Network(networksByName.get("Dogecoin test"), this));
+        networks.stream().forEach((network) -> { network.start(); });
+
+        receiveSelector.setOnAction((ActionEvent event) -> {
+            if (event.getTarget().equals(receiveSelector)) {
+                final Wallet wallet = (Wallet) receiveSelector.getValue();
+                final Address address = wallet.currentReceiveAddress();
+                Platform.runLater(() -> {
+                    myAddress.setText(address.toBase58());
+                });
+            }
+        });
+
+        sendButton.setOnAction((ActionEvent event) -> { sendCoinsOnUIThread(event); });
+
+        menuExit.setOnAction((ActionEvent event) -> {
+            Platform.exit();
+        });
+    }
+
+    private void initializeTransactionList() {
+        txList.setItems(transactions);
+        txNetworkColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
+            final WalletTransaction transaction = param.getValue();
+            final NetworkParameters params = transaction.getParams();
+            return new SimpleStringProperty(getNetworkName(params));
+        });
+        txDateColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
+            final WalletTransaction transaction = param.getValue();
+            final DateFormat dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT);
+            return new SimpleStringProperty(dateFormat.format(transaction.getTransaction().getUpdateTime()));
+        });
+        txAmountColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
+            final WalletTransaction transaction = param.getValue();
+            return new SimpleStringProperty(transaction.getBalanceChange().toPlainString());
+        });
+    }
+
+    private void initializeWalletList() {
+        walletList.setItems(networks);
         networkName.setCellValueFactory((TableColumn.CellDataFeatures<Network, String> param) -> {
             final Network network = param.getValue();
             final NetworkParameters params = network.getParams();
@@ -151,44 +198,6 @@ public class MainController {
             final Network network = param.getValue();
             return network.getObservableBlocks();
         });
-
-        // Set up transaction column rendering
-        txNetworkColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
-            final WalletTransaction transaction = param.getValue();
-            final NetworkParameters params = transaction.getParams();
-            return new SimpleStringProperty(getNetworkName(params));
-        });
-        txDateColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
-            final WalletTransaction transaction = param.getValue();
-            final DateFormat dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT);
-            return new SimpleStringProperty(dateFormat.format(transaction.getTransaction().getUpdateTime()));
-        });
-        txAmountColumn.setCellValueFactory((TableColumn.CellDataFeatures<WalletTransaction, String> param) -> {
-            final WalletTransaction transaction = param.getValue();
-            return new SimpleStringProperty(transaction.getBalanceChange().toPlainString());
-        });
-
-        receiveSelector.setConverter(new WalletToNetworkNameConvertor());
-        sendSelector.setConverter(receiveSelector.getConverter());
-
-        NetworkParameters dogecoinParams = networksByName.get("Dogecoin");
-        NetworkParameters dogecoinTestParams = networksByName.get("Dogecoin test");
-
-        networks.add(new Network(dogecoinParams, this));
-        networks.add(new Network(dogecoinTestParams, this));
-        networks.stream().forEach((network) -> { network.start(); });
-
-        receiveSelector.setOnAction((ActionEvent event) -> {
-            if (event.getTarget().equals(receiveSelector)) {
-                final Wallet wallet = (Wallet) receiveSelector.getValue();
-                final Address address = wallet.currentReceiveAddress();
-                Platform.runLater(() -> {
-                    myAddress.setText(address.toBase58());
-                });
-            }
-        });
-
-        sendButton.setOnAction((ActionEvent event) -> { sendCoinsOnUIThread(event); });
     }
 
     /**
