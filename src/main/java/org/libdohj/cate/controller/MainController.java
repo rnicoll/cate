@@ -46,6 +46,7 @@ import javafx.scene.Node;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
+import javafx.beans.binding.Bindings;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TextInputDialog;
@@ -190,16 +191,16 @@ public class MainController {
             final MenuItem encryptItem = new MenuItem("Encrypt Wallet");
             final MenuItem decryptItem = new MenuItem("Decrypt Wallet");
 
+            // TODO: Enable/disable options based on whether the wallet is locked.
+            // Alternatively have two different context menus that display different
+            // options.
             encryptItem.setOnAction(action -> encryptWalletOnUIThread(row.getItem()));
             decryptItem.setOnAction(action -> decryptWalletOnUIThread(row.getItem()));
 
-            // TODO: Use separate context menus based on whether the wallet is encrypted or not
-            // and bind to the wallet encryption state
-
             rowMenu.getItems().addAll(encryptItem, decryptItem);
 
-            // only display context menu for non-null items:
             row.contextMenuProperty().set(rowMenu);
+
             return row;
         });
         networkName.setCellValueFactory(dataFeatures -> {
@@ -245,7 +246,7 @@ public class MainController {
      * encrypted.
      */
     private void decryptWalletOnUIThread(final Network network) {
-        if (!network.isEncrypted()) {
+        if (!network.getObservableEncryptedState().getValue()) {
             Alert alert = new Alert(Alert.AlertType.ERROR, "Cannot decrypt wallet because it is not encrypted.");
             alert.setTitle("Wallet Is Not Encrypted");
             alert.showAndWait();
@@ -288,7 +289,7 @@ public class MainController {
      * wallet. If the wallet is already encrypted it changes the encryption key.
      */
     private void encryptWalletOnUIThread(final Network network) {
-        if (network.isEncrypted()) {
+        if (network.getObservableEncryptedState().getValue()) {
             Alert alert = new Alert(Alert.AlertType.ERROR, "Cannot encrypt wallet because it is already encrypted.");
             alert.setTitle("Wallet Is Encrypted");
             alert.showAndWait();

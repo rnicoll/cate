@@ -28,7 +28,8 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 import com.google.common.util.concurrent.Service;
-import javafx.scene.control.Alert;
+import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.value.ObservableBooleanValue;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Block;
@@ -53,7 +54,14 @@ import org.libdohj.cate.controller.MainController;
 
 /**
  * Class which manages incoming events and knows which network they apply
- * to.
+ * to. In a conventional software wallet, this would be part of the main UI,
+ * however here because we have multiple independent networks we expose them
+ * as an API for the UI to aggregate.
+ *
+ * Each network has its own thread both so that bitcoinj context (which is held
+ * in a thread store) is always correct for the network, and so that changes to
+ * the contained wallet are guaranteed to be done one at a time. As such many
+ * calls here take callbacks which are called once work is completed.
  */
 public class Network extends Thread implements PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
     /**
@@ -68,12 +76,14 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     private final MainController controller;
 
     /** Work queue for the thread once the kit has been started */
-    private final ArrayBlockingQueue<AbstractWork> workQueue = new ArrayBlockingQueue<>(WORK_QUEUE_SIZE);
+    private final ArrayBlockingQueue<Work> workQueue = new ArrayBlockingQueue<>(WORK_QUEUE_SIZE);
     private boolean cancelled = false;
 
     private final SimpleObjectProperty<String> balance = new SimpleObjectProperty<>("0");
     private final SimpleIntegerProperty blocks = new SimpleIntegerProperty(0);
     private final SimpleIntegerProperty blocksLeft = new SimpleIntegerProperty(0);
+    /** Copy of the wallet encrypted state which we update if we change */
+    private final SimpleBooleanProperty encrypted = new SimpleBooleanProperty();
     private final SimpleIntegerProperty peerCount = new SimpleIntegerProperty(0);
 
     public Network(NetworkParameters params, final MainController controller) {
@@ -143,7 +153,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     /**
      * @return the wallet kit
      */
-    public WalletAppKit getKit() {
+    private WalletAppKit getKit() {
         return kit;
     }
 
@@ -157,6 +167,10 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
 
     public ObservableValue<Number> getObservableBlocksLeft() {
         return blocksLeft;
+    }
+
+    public ObservableBooleanValue getObservableEncryptedState() {
+        return encrypted;
     }
 
     public ObservableValue<Number> getObservablePeerCount() {
@@ -176,7 +190,19 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
                 peerGroup().addDataEventListener(Network.this);
                 peerGroup().addConnectionEventListener(Network.this);
                 wallet().addCoinEventListener(Network.this);
-                Network.this.workQueue.offer(new RegisterWallet());
+
+                Network.this.workQueue.offer((Work) () -> {
+                    balance.set(Network.this.getKit().wallet().getBalance().toPlainString());
+                    try {
+                        blocks.set(Network.this.getKit().store().getChainHead().getHeight());
+                    } catch (BlockStoreException ex) {
+                        // TODO: Log
+                        System.err.println(ex.toString());
+                        ex.printStackTrace();
+                    }
+                    encrypted.set(wallet().isEncrypted());
+                    controller.registerWallet(Network.this, Network.this.getKit().wallet());
+                });
             }
         };
         kit.setAutoStop(false);
@@ -184,7 +210,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
         kit.startAsync();
 
         while (!cancelled) {
-            final AbstractWork work;
+            final Work work;
             try {
                 work = Network.this.workQueue.poll(POLL_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
             } catch(InterruptedException ex) {
@@ -230,8 +256,23 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     public void decrypt(String password, Consumer<Object> onSuccess, Consumer<Exception> onError,
                         final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
-        this.workQueue.offer(new DecryptWallet(password, onSuccess, onError),
-            timeout, timeUnit);
+        this.workQueue.offer((Work) () -> {
+            final Wallet wallet = kit.wallet();
+            if (!wallet.isEncrypted()) {
+                onError.accept(new WalletNotEncryptedException());
+            } else {
+                try {
+                    kit.wallet().decrypt(password);
+                    encrypted.set(false);
+                    onSuccess.accept(null);
+                } catch(KeyCrypterException ex) {
+                    onError.accept(ex);
+                } catch(Exception ex) {
+                    // TODO: Should we have a separate callback for crypter and non-crypter errors?
+                    onError.accept(ex);
+                }
+            }
+        });
     }
 
     /**
@@ -248,8 +289,23 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
     public void encrypt(final String password, final Consumer<Object> onSuccess, final Consumer<Exception> onError,
                         final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
-        this.workQueue.offer(new EncryptWallet(password, onSuccess, onError),
-            timeout, timeUnit);
+        this.workQueue.offer((Work) () -> {
+            final Wallet wallet = kit.wallet();
+            if (wallet.isEncrypted()) {
+                onError.accept(new WalletAlreadyEncryptedException());
+            } else {
+                try {
+                    kit.wallet().encrypt(password);
+                    encrypted.set(true);
+                    onSuccess.accept(null);
+                } catch(KeyCrypterException ex) {
+                    onError.accept(ex);
+                } catch(Exception ex) {
+                    // TODO: Should we have a separate callback for crypter and non-crypter errors?
+                    onError.accept(ex);
+                }
+            }
+        });
     }
 
     /**
@@ -269,116 +325,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
                           final Consumer<Coin> onInsufficientFunds,
                           final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
-        this.workQueue.offer(new SendCoins(address, amount, onSuccess, onInsufficientFunds),
-            timeout, timeUnit);
-    }
-
-    public boolean isEncrypted() {
-        // TODO: Is this thread safe?
-        return this.kit.wallet().isEncrypted();
-    }
-
-    private static class WalletAlreadyEncryptedException extends Exception { }
-    private static class WalletNotEncryptedException extends Exception { }
-
-    private abstract class AbstractWork implements Runnable {
-        
-    }
-
-    private class DecryptWallet extends AbstractWork {
-        private final String password;
-        private final Consumer<Object> onSuccess;
-        private final Consumer<Exception> onError;
-
-        private DecryptWallet(final String password, final Consumer<Object> onSuccess,
-                final Consumer<Exception> onError) {
-            this.password = password;
-            this.onSuccess = onSuccess;
-            this.onError = onError;
-        }
-
-        @Override
-        public void run() {
-            final Wallet wallet = kit.wallet();
-            if (!wallet.isEncrypted()) {
-                onError.accept(new WalletNotEncryptedException());
-            } else {
-                try {
-                    kit.wallet().decrypt(password);
-                    onSuccess.accept(null);
-                } catch(KeyCrypterException ex) {
-                    onError.accept(ex);
-                } catch(Exception ex) {
-                    // TODO: Should we have a separate callback for crypter and non-crypter errors?
-                    onError.accept(ex);
-                }
-            }
-        }
-    }
-
-    private class EncryptWallet extends AbstractWork {
-        private final String password;
-        private final Consumer<Object> onSuccess;
-        private final Consumer<Exception> onError;
-
-        private EncryptWallet(final String password, final Consumer<Object> onSuccess,
-                final Consumer<Exception> onError) {
-            this.password = password;
-            this.onSuccess = onSuccess;
-            this.onError = onError;
-        }
-
-        @Override
-        public void run() {
-            final Wallet wallet = kit.wallet();
-            if (wallet.isEncrypted()) {
-                onError.accept(new WalletAlreadyEncryptedException());
-            } else {
-                try {
-                    kit.wallet().encrypt(password);
-                    onSuccess.accept(null);
-                } catch(KeyCrypterException ex) {
-                    onError.accept(ex);
-                } catch(Exception ex) {
-                    // TODO: Should we have a separate callback for crypter and non-crypter errors?
-                    onError.accept(ex);
-                }
-            }
-        }
-    }
-
-    private class RegisterWallet extends AbstractWork {
-        @Override
-        public void run() {
-            controller.registerWallet(Network.this, Network.this.getKit().wallet());
-            try {
-                blocks.set(Network.this.getKit().store().getChainHead().getHeight());
-            } catch (BlockStoreException ex) {
-                // TODO: Log
-                System.err.println(ex.toString());
-                ex.printStackTrace();
-            }
-            balance.set(Network.this.getKit().wallet().getBalance().toPlainString());
-        }
-    }
-
-    private class SendCoins extends AbstractWork {
-        private final Consumer<SendResult> onSuccess;
-        private final Consumer<Coin> onInsufficientFunds;
-        private final Address address;
-        private final Coin amount;
-
-        private SendCoins(final Address address, final Coin amount,
-                          final Consumer<SendResult> onSuccess,
-                          final Consumer<Coin> onInsufficientFunds) {
-            this.address = address;
-            this.amount = amount;
-            this.onSuccess = onSuccess;
-            this.onInsufficientFunds = onInsufficientFunds;
-        }
-
-        @Override
-        public void run() {
+        this.workQueue.offer((Work) () -> {
             // TODO: Calculate fees in a network-appropriate way
             final Wallet.SendRequest req = Wallet.SendRequest.to(address, amount);
             final SendResult result;
@@ -389,6 +336,13 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
                 return;
             }
             onSuccess.accept(result);
-        }
+        });
+    }
+
+    private static class WalletAlreadyEncryptedException extends Exception { }
+    private static class WalletNotEncryptedException extends Exception { }
+
+    private interface Work {
+        public void run();
     }
 }
