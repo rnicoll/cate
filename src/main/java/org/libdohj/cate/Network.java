@@ -16,6 +16,8 @@
 package org.libdohj.cate;
 
 import java.io.File;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -28,12 +30,9 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
 import com.google.common.util.concurrent.Service;
-import java.util.Arrays;
-import java.util.HashSet;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.value.ObservableBooleanValue;
 
-import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.FilteredBlock;
@@ -43,9 +42,12 @@ import org.bitcoinj.core.Message;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Peer;
 import org.bitcoinj.core.PeerAddress;
+import org.bitcoinj.core.StoredBlock;
 import org.bitcoinj.core.Transaction;
+import org.bitcoinj.core.VerificationException;
 import org.bitcoinj.core.Wallet;
 import org.bitcoinj.core.Wallet.SendResult;
+import org.bitcoinj.core.listeners.NewBestBlockListener;
 import org.bitcoinj.core.listeners.PeerConnectionEventListener;
 import org.bitcoinj.core.listeners.PeerDataEventListener;
 import org.bitcoinj.core.listeners.WalletCoinEventListener;
@@ -67,7 +69,7 @@ import org.spongycastle.crypto.params.KeyParameter;
  * the contained wallet are guaranteed to be done one at a time. As such many
  * calls here take callbacks which are called once work is completed.
  */
-public class Network extends Thread implements PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+public class Network extends Thread implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
     /**
      * Interval between checking of the network has been told to shut down.
      */
@@ -99,7 +101,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
      * both events (i.e. a transaction that pays out, but also has change
      * paying back to us).
      */
-    private Set<Transaction> seenTransactions = new HashSet<>();
+    private final Set<Transaction> seenTransactions = new HashSet<>();
 
     public Network(NetworkParameters params, final MainController controller, final File dataDir) {
         this.controller = controller;
@@ -112,19 +114,17 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
         if (blocksLeft <= 0) {
             synced = true;
         }
-        try {
-            this.blocks.set(kit.store().getChainHead().getHeight());
-        } catch (BlockStoreException ex) {
-            // TODO: Log
-            System.err.println(ex.toString());
-            ex.printStackTrace();
-        }
         this.blocksLeft.set(blocksLeft);
     }
 
     @Override
     public void onChainDownloadStarted(Peer peer, int blocksLeft) {
         this.blocksLeft.set(blocksLeft);
+    }
+
+    @Override
+    public void notifyNewBestBlock(StoredBlock block) throws VerificationException {
+        this.blocks.set(block.getHeight());
     }
 
     @Override
@@ -214,6 +214,7 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
                 peerGroup().setConnectTimeoutMillis(1000);
                 peerGroup().addDataEventListener(Network.this);
                 peerGroup().addConnectionEventListener(Network.this);
+                chain().addNewBestBlockListener(Network.this);
                 wallet().addCoinEventListener(Network.this);
 
                 Network.this.workQueue.offer((Work) () -> {
@@ -255,8 +256,8 @@ public class Network extends Thread implements PeerDataEventListener, PeerConnec
      * @return the stopped kit service.
      */
     public Service cancel() {
-        final Service service = kit.stopAsync();
         this.cancelled = true;
+        final Service service = kit.stopAsync();
         return service;
     }
 
