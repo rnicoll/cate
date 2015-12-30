@@ -196,5 +196,10 @@
             <artifactId>izpack-installer</artifactId>
             <version>${izpack.version}</version>
         </dependency>
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna-platform</artifactId>
+            <version>4.2.1</version>
+        </dependency>
     </dependencies>
 </project>

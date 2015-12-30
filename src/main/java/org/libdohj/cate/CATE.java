@@ -25,6 +25,10 @@ import com.sun.jna.Library;
 import com.sun.jna.Native;
 import com.sun.jna.NativeMapped;
 import com.sun.jna.PointerType;
+import com.sun.jna.platform.win32.Guid;
+import com.sun.jna.platform.win32.Ole32;
+import com.sun.jna.ptr.PointerByReference;
+import com.sun.jna.win32.StdCallLibrary;
 import com.sun.jna.win32.W32APIFunctionMapper;
 import com.sun.jna.win32.W32APITypeMapper;
 import javafx.application.Application;
@@ -46,15 +50,18 @@ public class CATE extends Application {
 
     private static File buildDataDir() {
         if (com.sun.jna.Platform.isWindows()) {
-            // Modified from http://stackoverflow.com/questions/585534/what-is-the-best-way-to-find-the-users-home-directory-in-java
-            char[] pszPath = new char[Shell32.MAX_PATH];
-            int hResult = Shell32.INSTANCE.SHGetFolderPath((HWND) null, Shell32.CSIDL_LOCAL_APPDATA,
-                (HANDLE) null, Shell32.SHGFP_TYPE_CURRENT, pszPath);
+            // Modified from http://stackoverflow.com/questions/5953149/detect-the-location-of-appdata-locallow-with-jna
+            final PointerByReference ppszPath = new PointerByReference();
+            int hResult = Shell32.INSTANCE.SHGetKnownFolderPath(Shell32.FOLDERID_RoamingAppData,
+                Shell32.KF_FLAG_CREATE, (HANDLE) null, ppszPath);
             if (Shell32.S_OK == hResult) {
-                String path = new String(pszPath);
-                int len = path.indexOf('\0');
-                path = path.substring(0, len);
-                return new File(path + "\\" + APPLICATION_NAME_FOLDER);
+                try {
+                    String path = nullTerminatedToString(ppszPath);
+
+                    return new File(path + "\\" + APPLICATION_NAME_FOLDER);
+                } finally {
+                    Ole32.INSTANCE.CoTaskMemFree(ppszPath.getValue());
+                }
             } else {
                 logger.log(Level.SEVERE, null, "Could not determine local application data directory: " + hResult);
             }
@@ -70,6 +77,25 @@ public class CATE extends Application {
      */
     public static File getDataDir() {
         return dataDir;
+    }
+
+    /**
+     * Convert a Win32 string into a Java string.
+     *
+     * @param ppszPath pointer to the string to convert.
+     */
+    private static String nullTerminatedToString(PointerByReference ppszPath) {
+        char delim = '\0';
+        char[] chars = ppszPath.getValue().getCharArray(0, Shell32.MAX_PATH);
+        int charIdx;
+
+        for (charIdx = 0; charIdx < chars.length; charIdx++) {
+            if (chars[charIdx] == delim) {
+                break;
+            }
+        }
+
+        return new String(chars, 0, charIdx);
     }
 
     private MainController controller;
@@ -101,7 +127,7 @@ public class CATE extends Application {
         launch(args);
     }
 
-    private static Map<String, Object> LOAD_LIBRARY_OPTIONS = new HashMap<>();
+    private static final Map<String, Object> LOAD_LIBRARY_OPTIONS = new HashMap<>();
     static {
         LOAD_LIBRARY_OPTIONS.put(Library.OPTION_TYPE_MAPPER, W32APITypeMapper.UNICODE);
         LOAD_LIBRARY_OPTIONS.put(Library.OPTION_FUNCTION_MAPPER, W32APIFunctionMapper.UNICODE);
@@ -110,28 +136,24 @@ public class CATE extends Application {
     static class HANDLE extends PointerType implements NativeMapped {
     }
 
-    static class HWND extends HANDLE {
-    }
-
     /**
      * Wrapper around the Windows Shell32 library, used to get the path of the
      * application data folder.
      */
-    static interface Shell32 extends Library {
+    static interface Shell32 extends StdCallLibrary {
 
         public static final int MAX_PATH = 260;
-        public static final int CSIDL_LOCAL_APPDATA = 0x001c;
-        public static final int SHGFP_TYPE_CURRENT = 0;
-        public static final int SHGFP_TYPE_DEFAULT = 1;
+        public static final Guid.GUID FOLDERID_RoamingAppData = new Guid.GUID("3EB685DB-65F9-4CF6-A03A-E3EF65729F3D");
+        public static final int KF_FLAG_CREATE = 0x00008000;
         public static final int S_OK = 0;
 
         static Shell32 INSTANCE = (Shell32) Native.loadLibrary("shell32", Shell32.class, LOAD_LIBRARY_OPTIONS);
 
         /**
-         * See https://msdn.microsoft.com/en-us/library/bb762181(VS.85).aspx
+         * See https://msdn.microsoft.com/en-us/library/bb762188(v=vs.85).aspx
          */
-        public int SHGetFolderPath(HWND hwndOwner, int nFolder, HANDLE hToken,
-                int dwFlags, char[] pszPath);
+        public int SHGetKnownFolderPath(Guid.GUID hwndOwner, int dwFlags, HANDLE hToken,
+                PointerByReference ppszPath);
 
     }
 }
