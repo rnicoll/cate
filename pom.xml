@@ -4,7 +4,6 @@
     <groupId>org.libdohj</groupId>
     <artifactId>cate</artifactId>
     <version>0.14-SNAPSHOT</version>
-    <packaging>jar</packaging>
 
     <licenses>
         <license>
@@ -21,22 +20,125 @@
         </developer>
     </developers>
 
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+
+        <izpack.version>5.0.6</izpack.version>
+        <izpack.staging>${project.build.directory}/staging</izpack.staging>
+        <installer-output-filename>cate-${project.version}-installer.jar</installer-output-filename>
+    </properties>
+
+    <!--
+      - This builds:
+      - 1. A regular JAR of just the CATE classes
+      - 2. A full executable JAR including dependencies
+      - 3. A staging area for IZ Pack, containing the executable from stage 2
+      - 4. An IZ Pack installer
+    -->
     <build>
       <plugins>
+
+        <!-- Create main executable jar -->
         <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-jar-plugin</artifactId>
-          <version>2.6</version>
-          <configuration>
-            <archive>
-              <manifest>
-                <addClasspath>true</addClasspath>
-                <classpathPrefix>lib/</classpathPrefix>
-                <mainClass>org.libdohj.cate.CATE</mainClass>
-              </manifest>
-            </archive>
-          </configuration>
+            <artifactId>maven-assembly-plugin</artifactId>
+            <version>2.6</version>
+            <configuration>
+                <descriptors>
+                    <descriptor>src/main/assemble/exe.xml</descriptor>
+                </descriptors>
+                <archive>
+                    <manifestFile>src/main/resources/META-INF/MANIFEST.MF</manifestFile>
+                </archive>
+            </configuration>
+            <executions>
+                <execution>
+                    <id>make-assembly</id>
+                    <phase>package</phase>
+                    <goals>
+                        <goal>single</goal>
+                    </goals>
+                </execution>
+            </executions>
         </plugin>
+
+        <!-- Create the staging directory -->
+        <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <executions>
+               <execution>
+                  <id>create-staging-area</id>
+                  <phase>process-resources</phase>
+                  <goals>
+                     <goal>run</goal>
+                  </goals>
+                  <configuration>
+                     <tasks>
+                        <mkdir dir="${izpack.staging}" />
+                     </tasks>
+                  </configuration>
+               </execution>
+            </executions>
+         </plugin>
+
+        <!-- Copy IZ Pack files to the staging directory -->
+        <plugin>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>2.7</version>
+            <executions>
+                <execution>
+                    <id>create-staging-area</id>
+                    <phase>package</phase>
+                    <goals>
+                        <goal>copy-resources</goal>
+                    </goals>
+                    <configuration>
+                        <outputDirectory>${izpack.staging}</outputDirectory>
+                        <resources>
+                            <resource>
+                                <directory>src/main/izpack</directory>
+                                <filtering>true</filtering>
+                                <includes>
+                                    <include>install.xml</include>
+                                </includes>
+                            </resource>
+                            <resource>
+                                <directory>target</directory>
+                                <includes>
+                                    <include>cate-${project.version}-exe.jar</include>
+                                </includes>
+                            </resource>
+                        </resources>
+                    </configuration>
+                </execution>
+            </executions>
+         </plugin>
+
+        <plugin>
+           <groupId>org.codehaus.izpack</groupId>
+           <artifactId>izpack-maven-plugin</artifactId>
+           <version>${izpack.version}</version>
+           <executions>
+              <execution>
+                 <phase>package</phase>
+                 <goals><goal>izpack</goal></goals>
+                 <configuration>
+                    <!-- base for relative paths in izpack descriptor -->
+                    <baseDir>${izpack.staging}</baseDir>
+                    <installFile>${basedir}/src/main/izpack/install.xml</installFile>
+                    <output>${project.build.directory}/${installer-output-filename}</output>
+                 </configuration>
+              </execution>
+           </executions>
+           <dependencies>
+              <dependency>
+                 <groupId>org.codehaus.izpack</groupId>
+                 <artifactId>izpack-panel</artifactId>
+                 <version>${izpack.version}</version>
+              </dependency>
+            </dependencies>
+         </plugin>
       </plugins>
     </build>
 
@@ -79,11 +181,20 @@
             <version>4.2.1</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-jdk14</artifactId>
+            <version>1.7.7</version>
+        </dependency>
+        <dependency>
+            <groupId>org.codehaus.izpack</groupId>
+            <artifactId>izpack-core</artifactId>
+            <version>${izpack.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.codehaus.izpack</groupId>
+            <artifactId>izpack-installer</artifactId>
+            <version>${izpack.version}</version>
+        </dependency>
     </dependencies>
-
-    <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
-    </properties>
 </project>
