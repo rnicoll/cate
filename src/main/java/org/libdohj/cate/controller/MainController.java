@@ -61,6 +61,7 @@ import org.bitcoinj.core.TransactionOutPoint;
 import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
 import org.bitcoinj.crypto.KeyCrypterException;
+import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.libdohj.cate.CATE;
@@ -138,8 +139,9 @@ public class MainController {
     private final ObservableList<Wallet> wallets = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
     private final Map<Wallet, Network> walletNetworks = new HashMap<>();
+    private KeyCrypterScrypt keyCrypter;
 
-    private static Logger logger = LoggerFactory.getLogger(MainController.class);
+    private final Logger logger = LoggerFactory.getLogger(MainController.class);
 
     @FXML
     public void initialize() {

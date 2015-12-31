@@ -49,6 +49,7 @@ import org.bitcoinj.core.listeners.NewBestBlockListener;
 import org.bitcoinj.core.listeners.PeerConnectionEventListener;
 import org.bitcoinj.core.listeners.PeerDataEventListener;
 import org.bitcoinj.core.listeners.WalletCoinEventListener;
+import org.bitcoinj.crypto.KeyCrypter;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.kits.WalletAppKit;
@@ -86,9 +87,6 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
     private boolean synced = false;
     private final MainController controller;
     private final Logger logger = LoggerFactory.getLogger(Network.class);
-
-    /** Crypter used to convert wallet passwords to AES keys */
-    private final KeyCrypterScrypt keyCrypter = new KeyCrypterScrypt();
 
     /** Work queue for the thread once the kit has been started */
     private final ArrayBlockingQueue<Work> workQueue = new ArrayBlockingQueue<>(WORK_QUEUE_SIZE);
@@ -210,13 +208,6 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
         return params;
     }
 
-    /**
-     * Converts a password to an AES key.
-     */
-    public KeyParameter getKeyFromPassword(String password) {
-        return keyCrypter.deriveKey(password);
-    }
-
     @Override
     public void run() {
         kit = new WalletAppKit(params, dataDir, "cate_" + params.getId()) {
@@ -307,12 +298,18 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
             if (!wallet.isEncrypted()) {
                 onCrypterError.accept(null);
             } else {
-                try {
-                    kit.wallet().decrypt(keyCrypter.deriveKey(password));
-                    encrypted.set(false);
-                    onSuccess.accept(null);
-                } catch(KeyCrypterException ex) {
-                    onCrypterError.accept(ex);
+                final KeyCrypter keyCrypter = kit.wallet().getKeyCrypter();
+
+                if (keyCrypter == null) {
+                    this.controller.handleNetworkError(this, new IllegalStateException("Wallet is encrypted but has no key crypter."));
+                } else {
+                    try {
+                        kit.wallet().decrypt(keyCrypter.deriveKey(password));
+                        encrypted.set(false);
+                        onSuccess.accept(null);
+                    } catch(KeyCrypterException ex) {
+                        onCrypterError.accept(ex);
+                    }
                 }
             }
         });
@@ -340,6 +337,12 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
             if (wallet.isEncrypted()) {
                 onWalletEncrypted.accept(null);
             } else {
+                KeyCrypter keyCrypter = kit.wallet().getKeyCrypter();
+
+                if (keyCrypter == null) {
+                    keyCrypter = new KeyCrypterScrypt();
+                }
+
                 try {
                     kit.wallet().encrypt(keyCrypter, keyCrypter.deriveKey(password));
                     encrypted.set(true);
@@ -384,6 +387,23 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
                 Arrays.fill(req.aesKey.getKey(), (byte) 0);
             }
         });
+    }
+
+    /**
+     * Get a key parameter derived from the given password. This only works if
+     * the wallet is, or previously has been, encrypted.
+     *
+     * @param password the password to derive an AES key from.
+     * @return the derived AES key.
+     * @throws IllegalStateException if the wallet is not encrypted
+     */
+    public KeyParameter getKeyFromPassword(String password) throws IllegalStateException {
+        final KeyCrypter keyCrypter = kit.wallet().getKeyCrypter();
+        if (keyCrypter == null) {
+            return keyCrypter.deriveKey(password);
+        } else {
+            throw new IllegalStateException("Wallet does not have a key crypter.");
+        }
     }
 
     private interface Work {
