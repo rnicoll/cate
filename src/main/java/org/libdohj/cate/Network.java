@@ -23,16 +23,14 @@ import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.value.ObservableValue;
-import com.google.common.util.concurrent.Service;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.value.ObservableBooleanValue;
 
+import com.google.common.util.concurrent.Service;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.FilteredBlock;
@@ -56,6 +54,8 @@ import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.store.BlockStoreException;
 import org.libdohj.cate.controller.MainController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.spongycastle.crypto.params.KeyParameter;
 
 /**
@@ -68,6 +68,10 @@ import org.spongycastle.crypto.params.KeyParameter;
  * in a thread store) is always correct for the network, and so that changes to
  * the contained wallet are guaranteed to be done one at a time. As such many
  * calls here take callbacks which are called once work is completed.
+ *
+ * While in theory we could make this an Executor and then share it with
+ * WalletAppKit, it's useful to know that any work sent to the network is
+ * executed in-order.
  */
 public class Network extends Thread implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
     /**
@@ -81,6 +85,7 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
     private WalletAppKit kit;
     private boolean synced = false;
     private final MainController controller;
+    private final Logger logger = LoggerFactory.getLogger(Network.class);
 
     /** Crypter used to convert wallet passwords to AES keys */
     private final KeyCrypterScrypt keyCrypter = new KeyCrypterScrypt();
@@ -103,7 +108,13 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
      */
     private final Set<Transaction> seenTransactions = new HashSet<>();
 
-    public Network(NetworkParameters params, final MainController controller, final File dataDir) {
+    /**
+     * @param params network this manages.
+     * @param controller the controller to push events back to.
+     * @param dataDir the data directory to store the wallet and SPV chain in.
+     */
+    public Network(final NetworkParameters params, final MainController controller,
+            final File dataDir) {
         this.controller = controller;
         this.params = params;
         this.dataDir = dataDir;
@@ -222,9 +233,8 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
                     try {
                         blocks.set(Network.this.getKit().store().getChainHead().getHeight());
                     } catch (BlockStoreException ex) {
-                        // TODO: Log
-                        System.err.println(ex.toString());
-                        ex.printStackTrace();
+                        logger.error("Error getting current chain head while starting wallet "
+                            + params.getId(), ex);
                     }
                     encrypted.set(wallet().isEncrypted());
                     controller.registerWallet(Network.this, Network.this.getKit().wallet());
@@ -244,7 +254,14 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
                 continue;
             }
             if (null != work) {
-                work.run();
+                try {
+                    work.run();
+                } catch(Exception ex) {
+                    // TODO: Now what!?
+                    logger.error("Error running work for network "
+                        + params.getId(), ex);
+                    this.controller.handleNetworkError(this, ex);
+                }
             }
         }
     }
@@ -271,31 +288,31 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
     /**
      * Queue a request to decrypt this wallet. This returns immediately,
      * as the actual work is done on the network thread in order to ensure the
-     * thread context is correct.
+     * thread context is correct. Unhandled errors are reported back to Network.
      * 
      * @param password password to decrypt the wallet with
-     * @param onSuccess handler to be called on success
-     * @param onError callback in case of an error
+     * @param onSuccess callback on success
+     * @param onWalletNotEncrypted callback if the wallet is not encrypted
+     * @param onCrypterError callback in case of an error in the key crypter
      * @param timeout timeout on queueing the work request
      * @param timeUnit time unit for the timeout
      */
-    public void decrypt(String password, Consumer<Object> onSuccess, Consumer<Exception> onError,
+    public void decrypt(String password, Consumer<Object> onSuccess,
+                        Consumer<Object> onWalletNotEncrypted,
+                        Consumer<KeyCrypterException> onCrypterError,
                         final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
         this.workQueue.offer((Work) () -> {
             final Wallet wallet = kit.wallet();
             if (!wallet.isEncrypted()) {
-                onError.accept(new WalletNotEncryptedException());
+                onCrypterError.accept(null);
             } else {
                 try {
                     kit.wallet().decrypt(keyCrypter.deriveKey(password));
                     encrypted.set(false);
                     onSuccess.accept(null);
                 } catch(KeyCrypterException ex) {
-                    onError.accept(ex);
-                } catch(Exception ex) {
-                    // TODO: Should we have a separate callback for crypter and non-crypter errors?
-                    onError.accept(ex);
+                    onCrypterError.accept(ex);
                 }
             }
         });
@@ -308,27 +325,27 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
      * 
      * @param password password to encrypt the wallet with
      * @param onSuccess handler to be called on success
-     * @param onError callback in case of an error
+     * @param onWalletEncrypted callback if the wallet is not encrypted
+     * @param onCrypterError callback in case of an error in the key crypter
      * @param timeout timeout on queueing the work request
      * @param timeUnit time unit for the timeout
      */
-    public void encrypt(final String password, final Consumer<Object> onSuccess, final Consumer<Exception> onError,
+    public void encrypt(final String password, final Consumer<Object> onSuccess,
+                        Consumer<Object> onWalletEncrypted,
+                        Consumer<KeyCrypterException> onCrypterError,
                         final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
         this.workQueue.offer((Work) () -> {
             final Wallet wallet = kit.wallet();
             if (wallet.isEncrypted()) {
-                onError.accept(new WalletAlreadyEncryptedException());
+                onWalletEncrypted.accept(null);
             } else {
                 try {
                     kit.wallet().encrypt(keyCrypter, keyCrypter.deriveKey(password));
                     encrypted.set(true);
                     onSuccess.accept(null);
                 } catch(KeyCrypterException ex) {
-                    onError.accept(ex);
-                } catch(Exception ex) {
-                    // TODO: Should we have a separate callback for crypter and non-crypter errors?
-                    onError.accept(ex);
+                    onCrypterError.accept(ex);
                 }
             }
         });
@@ -349,7 +366,6 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
                           final Consumer<SendResult> onSuccess,
                           final Consumer<Coin> onInsufficientFunds,
                           final Consumer<KeyCrypterException> onWalletLocked,
-                          final Consumer<Exception> onError,
                           final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
         this.workQueue.offer((Work) () -> {
@@ -362,8 +378,6 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
                 onInsufficientFunds.accept(ex.missing);
             } catch(KeyCrypterException ex) {
                 onWalletLocked.accept(ex);
-            } catch(Exception ex) {
-                onError.accept(ex);
             } finally {
                 // Wipe the key to ensure if it's stored in insecure memory, it's all
                 // zeroes on disk
@@ -372,10 +386,7 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
         });
     }
 
-    private static class WalletAlreadyEncryptedException extends Exception { }
-    private static class WalletNotEncryptedException extends Exception { }
-
     private interface Work {
-        public void run();
+        public void run() throws Exception;
     }
 }

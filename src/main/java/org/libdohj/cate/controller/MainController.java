@@ -15,11 +15,8 @@
  */
 package org.libdohj.cate.controller;
 
-import java.io.File;
 import java.text.DateFormat;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -73,6 +70,8 @@ import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.LitecoinMainNetParams;
 
 import org.libdohj.cate.Network;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Base window from which the rest of CATE is launched. Lists any active
@@ -140,7 +139,7 @@ public class MainController {
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
     private final Map<Wallet, Network> walletNetworks = new HashMap<>();
 
-    private static Logger logger = Logger.getLogger(MainController.class.getName());
+    private static Logger logger = LoggerFactory.getLogger(MainController.class);
 
     @FXML
     public void initialize() {
@@ -278,16 +277,22 @@ public class MainController {
                     });
                 }, t -> {
                     Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        Alert alert = new Alert(Alert.AlertType.WARNING,
+                            "Wallet is already decrypted");
+                        alert.setTitle("Wallet Already Decrypted");
+                        alert.showAndWait();
+                    });
+                }, t -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.ERROR,
+                            t.getMessage());
                         alert.setTitle("Wallet Decryption Failed");
-                        // TODO: We really need better error handling
-                        alert.setContentText(t.getMessage());
                         alert.showAndWait();
                     });
                 }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             } catch (InterruptedException ex) {
                 // TODO: Now what!?
-                logger.log(Level.SEVERE, null, ex);
+                logger.error("Interrupted while pushing work to network thread.", ex);
             }
         });
     }
@@ -303,9 +308,9 @@ public class MainController {
             alert.showAndWait();
             return;
         }
- 
+
         TextInputDialog dialog = new TextInputDialog();
-        
+
         dialog.setTitle("Wallet Password");
         dialog.setHeaderText("Enter Password to Encrypt");
         dialog.setContentText("Please enter the wallet password to encrypt the wallet:");
@@ -315,23 +320,29 @@ public class MainController {
             try {
                 network.encrypt(value, o -> {
                     Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                        Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                            "Wallet successfully encrypted");
                         alert.setTitle("Wallet Encrypted");
-                        alert.setContentText("Wallet successfully encrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        Alert alert = new Alert(Alert.AlertType.WARNING,
+                            "Wallet is already encrypted");
+                        alert.setTitle("Wallet Already Encrypted");
+                        alert.showAndWait();
+                    });
+                }, t -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.ERROR,
+                            t.getMessage());
                         alert.setTitle("Wallet Encryption Failed");
-                        // TODO: We really need better error handling
-                        alert.setContentText(t.getMessage());
                         alert.showAndWait();
                     });
                 }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             } catch (InterruptedException ex) {
                 // TODO: Now what!?
-                logger.log(Level.SEVERE, null, ex);
+                logger.error("Interrupted while pushing work to network thread.", ex);
             }
         });
     }
@@ -429,13 +440,10 @@ public class MainController {
                     alert.setContentText("The provided password did not unlock the wallet, please try again");
                     alert.showAndWait();
                 });
-            }, (Exception ex) -> {
-                logger.log(Level.SEVERE, ex.getMessage(), ex);
-                showInternalError(ex);
             }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
             // TODO: Now what!?
-            logger.log(Level.SEVERE, null, ex);
+            logger.error("Interrupted while pushing work to network thread.", ex);
         }
     }
 
@@ -563,6 +571,21 @@ public class MainController {
             alert.setContentText(ex.getMessage());
             alert.showAndWait();
         });
+    }
+
+    /**
+     * Handles an error from the network threads.
+     *
+     * @param network network the error occurred within.
+     * @param cause the error to report.
+     */
+    public void handleNetworkError(Network network, Throwable cause) {
+        if (cause instanceof Exception) {
+            showInternalError((Exception) cause);
+        } else {
+            // Fatal, begin shutdown
+            Platform.exit();
+        }
     }
 
     private class WalletToNetworkNameConvertor extends StringConverter<Wallet> {
