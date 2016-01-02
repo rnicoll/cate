@@ -384,7 +384,9 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
             } finally {
                 // Wipe the key to ensure if it's stored in insecure memory, it's all
                 // zeroes on disk
-                Arrays.fill(req.aesKey.getKey(), (byte) 0);
+                if (null != req.aesKey) {
+                    Arrays.fill(req.aesKey.getKey(), (byte) 0);
+                }
             }
         });
     }
