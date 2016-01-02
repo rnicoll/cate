@@ -40,6 +40,7 @@ import javafx.stage.Stage;
 import org.libdohj.cate.controller.MainController;
 
 /**
+ * CATE: Cross-chain Atomic Trading Engine
  *
  * @author Ross Nicoll
  */

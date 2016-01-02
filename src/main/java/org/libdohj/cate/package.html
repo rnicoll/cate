@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<!--
+Copyright 2016 jrn.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<html>
+    <head>
+        <title>CATE: Cross-chain Atomic Trading Engine</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body>
+
+        <p>CATE is a multicoin wallet based on the bitcoinj and libdohj libraries.
+            It currently supports Bitcoin, Litecoin and Dogecoin, and is readily
+            extensible to support any other currencies compatible with bitcoinj.
+        </p>
+
+        <p>Application launch is via the {@link org.libdohj.cate.CATE} class, which
+            constructs the JavaFX scene and passes control to {@link org.libdohj.cate.controller.MainController}.
+            MainController is the main window permanently visible to the user,
+            and interacts with the underly wallets on behalf of the user. Due to
+            the architecture of bitcoinj using thread-local variables to track
+            the active coin, each coin requires its own isolated thread(s).
+            The {@link org.libdohj.cate.Network} class acts as a bridge from the
+            UI to the underlying wallet, and each instance is its own independent
+            thread.</p>
+
+        <p>Calls from the main controller to a wallet involve a jump between
+            threads, and as such the result is returned via callbacks. Expected
+            errors (i.e. insufficient funds to send a transaction) are returned
+            via callbacks as well, while exceptions (i.e. null pointers) are
+            sent out of band from the network to the main controller.</p>
+
+    </body>
+</html>
