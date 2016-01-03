@@ -39,14 +39,6 @@ public class CATE extends Application {
 
     private static File dataDir = null;
 
-    /**
-     * @return the dataDir
-     */
-    public static File getDataDir() {
-        // TODO decouple me
-        return dataDir;
-    }
-
     private MainController controller;
 
     @Override
@@ -55,6 +47,9 @@ public class CATE extends Application {
         Parent root = loader.load();
 
         this.controller = (MainController) loader.getController();
+
+        this.controller.connectTo("Dogecoin", dataDir);
+        this.controller.connectTo("Dogecoin test", dataDir);
 
         primaryStage.setTitle("CATE");
         primaryStage.setScene(new Scene(root, 800, 500));
@@ -71,6 +66,7 @@ public class CATE extends Application {
             dataDir = dataDirFactory.get();
         } catch (DataDirFactory.UnableToDetermineDataDirException ex) {
             logger.log(Level.SEVERE, "Unable to determine path to Data Directory", ex);
+            System.exit(1);
         }
 
         launch(args);
