@@ -20,7 +20,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
@@ -47,9 +46,10 @@ import javafx.scene.control.TextInputDialog;
 import javafx.scene.Node;
 import javafx.util.StringConverter;
 
-
 import com.google.common.util.concurrent.Service;
 import java.util.stream.Collectors;
+
+import org.libdohj.cate.NetworkResolver;
 import org.spongycastle.crypto.params.KeyParameter;
 
 import org.bitcoinj.core.Address;
@@ -63,13 +63,7 @@ import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
-import org.bitcoinj.params.MainNetParams;
-import org.bitcoinj.params.TestNet3Params;
 import org.libdohj.cate.CATE;
-
-import org.libdohj.params.DogecoinMainNetParams;
-import org.libdohj.params.DogecoinTestNet3Params;
-import org.libdohj.params.LitecoinMainNetParams;
 
 import org.libdohj.cate.Network;
 import org.slf4j.Logger;
@@ -83,22 +77,6 @@ import org.slf4j.LoggerFactory;
  */
 public class MainController {
     private static final int NETWORK_PUSH_TIMEOUT_MILLIS = 500;
-
-    private static final LinkedHashMap<NetworkParameters, String> networkNames = new LinkedHashMap<>();
-    private static final LinkedHashMap<String, NetworkParameters> networksByName = new LinkedHashMap<>();
-
-    static {
-        // TODO: Localize
-        networkNames.put(MainNetParams.get(), "Bitcoin");
-        networkNames.put(TestNet3Params.get(), "Bitcoin test");
-        networkNames.put(LitecoinMainNetParams.get(), "Litecoin");
-        networkNames.put(DogecoinMainNetParams.get(), "Dogecoin");
-        networkNames.put(DogecoinTestNet3Params.get(), "Dogecoin test");
-
-        for (NetworkParameters params: networkNames.keySet()) {
-            networksByName.put(networkNames.get(params), params);
-        }
-    }
 
     @FXML
     private MenuItem menuExit;
@@ -154,8 +132,8 @@ public class MainController {
         initializeWalletList();
         initializeTransactionList();
 
-        networks.add(new Network(networksByName.get("Dogecoin"), this, CATE.getDataDir()));
-        networks.add(new Network(networksByName.get("Dogecoin test"), this, CATE.getDataDir()));
+        networks.add(new Network(NetworkResolver.getParams("Dogecoin"), this, CATE.getDataDir()));
+        networks.add(new Network(NetworkResolver.getParams("Dogecoin test"), this, CATE.getDataDir()));
         networks.stream().forEach(network -> network.startAsync());
 
         receiveSelector.setOnAction((ActionEvent event) -> {
@@ -168,7 +146,9 @@ public class MainController {
             }
         });
 
-        sendButton.setOnAction((ActionEvent event) -> { sendCoinsOnUIThread(event); });
+        sendButton.setOnAction((ActionEvent event) -> {
+            sendCoinsOnUIThread(event);
+        });
 
         menuExit.setOnAction((ActionEvent event) -> {
             Platform.exit();
@@ -180,7 +160,7 @@ public class MainController {
         txNetworkColumn.setCellValueFactory(dataFeatures -> {
             final WalletTransaction transaction = dataFeatures.getValue();
             final NetworkParameters params = transaction.getParams();
-            return new SimpleStringProperty(getNetworkName(params));
+            return new SimpleStringProperty(NetworkResolver.getName(params));
         });
         txDateColumn.setCellValueFactory(dataFeatures -> {
             final WalletTransaction transaction = dataFeatures.getValue();
@@ -216,7 +196,7 @@ public class MainController {
         networkName.setCellValueFactory(dataFeatures -> {
             final Network network = dataFeatures.getValue();
             final NetworkParameters params = network.getParams();
-            return new SimpleStringProperty(getNetworkName(params));
+            return new SimpleStringProperty(NetworkResolver.getName(params));
         });
         networkBalance.setCellValueFactory(dataFeatures -> {
             final Network network = dataFeatures.getValue();
@@ -281,14 +261,14 @@ public class MainController {
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING,
-                            "Wallet is already decrypted");
+                                "Wallet is already decrypted");
                         alert.setTitle("Wallet Already Decrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR,
-                            t.getMessage());
+                                t.getMessage());
                         alert.setTitle("Wallet Decryption Failed");
                         alert.showAndWait();
                     });
@@ -324,21 +304,21 @@ public class MainController {
                 network.encrypt(value, o -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                            "Wallet successfully encrypted");
+                                "Wallet successfully encrypted");
                         alert.setTitle("Wallet Encrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING,
-                            "Wallet is already encrypted");
+                                "Wallet is already encrypted");
                         alert.setTitle("Wallet Already Encrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR,
-                            t.getMessage());
+                                t.getMessage());
                         alert.setTitle("Wallet Encryption Failed");
                         alert.showAndWait();
                     });
@@ -384,12 +364,12 @@ public class MainController {
         // TODO: Show details of fees and total including fees
         confirmSend.setTitle("Confirm Sending Coins");
         confirmSend.setHeaderText("Send "
-            + network.getParams().getMonetaryFormat().format(amount) + " to "
-            + address.toBase58() + "?");
+                + network.getParams().getMonetaryFormat().format(amount) + " to "
+                + address.toBase58() + "?");
         confirmSend.setContentText("You are about to send "
-            + network.getParams().getMonetaryFormat().format(amount) + " to "
-            + address.toBase58());
-        confirmSend.initOwner(((Node)event.getTarget()).getScene().getWindow());
+                + network.getParams().getMonetaryFormat().format(amount) + " to "
+                + address.toBase58());
+        confirmSend.initOwner(((Node) event.getTarget()).getScene().getWindow());
 
         confirmSend.showAndWait()
             .filter(response -> response == ButtonType.OK)
@@ -463,14 +443,6 @@ public class MainController {
         } else {
             return null;
         }
-    }
-
-    /**
-     * @param params network parameters to look up name for.
-     * @return the name of a network
-     */
-    public static String getNetworkName(final NetworkParameters params) {
-        return networkNames.get(params);
     }
 
     /**
@@ -577,12 +549,12 @@ public class MainController {
 
         @Override
         public String toString(Wallet wallet) {
-            return networkNames.get(wallet.getParams());
+            return NetworkResolver.getName(wallet.getParams());
         }
 
         @Override
         public Wallet fromString(String string) {
-            final NetworkParameters params = networksByName.get(string);
+            final NetworkParameters params = NetworkResolver.getParams(string);
             for (Wallet wallet: wallets) {
                 if (wallet.getParams().equals(params)) {
                     return wallet;
