@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
  * Resolves NetworkParameters into names and names into NetworkParameters
  */
 public class NetworkResolver {
+
     private static final LinkedHashMap<NetworkParameters, String> networkNames = new LinkedHashMap<>();
     private static final LinkedHashMap<String, NetworkParameters> networksByName = new LinkedHashMap<>();
 
@@ -24,7 +25,7 @@ public class NetworkResolver {
         networkNames.put(DogecoinMainNetParams.get(), "Dogecoin");
         networkNames.put(DogecoinTestNet3Params.get(), "Dogecoin test");
 
-        for (NetworkParameters params: networkNames.keySet()) {
+        for (NetworkParameters params : networkNames.keySet()) {
             networksByName.put(networkNames.get(params), params);
         }
     }

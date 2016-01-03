@@ -72,10 +72,11 @@ import org.slf4j.LoggerFactory;
 /**
  * Base window from which the rest of CATE is launched. Lists any active
  * wallets, their status, and options to add new wallets.
- * 
+ *
  * @author Ross Nicoll
  */
 public class MainController {
+
     private static final int NETWORK_PUSH_TIMEOUT_MILLIS = 500;
 
     @FXML
@@ -142,15 +143,16 @@ public class MainController {
             }
         });
 
-        sendButton.setOnAction((ActionEvent event) -> { sendCoinsOnUIThread(event); });
+        sendButton.setOnAction((ActionEvent event) -> {
+            sendCoinsOnUIThread(event);
+        });
 
         menuExit.setOnAction((ActionEvent event) -> {
             Platform.exit();
         });
     }
 
-    public void connectTo(String name, File dataDir)
-    {
+    public void connectTo(String name, File dataDir) {
         NetworkParameters params = NetworkResolver.getParams(name); //TODO error handling (nullptr)
         Network network = new Network(params, this, dataDir);
         networks.add(network);
@@ -246,7 +248,7 @@ public class MainController {
         }
 
         TextInputDialog dialog = new TextInputDialog();
-        
+
         dialog.setTitle("Wallet Password");
         dialog.setHeaderText("Enter Password to Decrypt");
         dialog.setContentText("Please enter the wallet password to decrypt the wallet:");
@@ -263,14 +265,14 @@ public class MainController {
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING,
-                            "Wallet is already decrypted");
+                                "Wallet is already decrypted");
                         alert.setTitle("Wallet Already Decrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR,
-                            t.getMessage());
+                                t.getMessage());
                         alert.setTitle("Wallet Decryption Failed");
                         alert.showAndWait();
                     });
@@ -306,21 +308,21 @@ public class MainController {
                 network.encrypt(value, o -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                            "Wallet successfully encrypted");
+                                "Wallet successfully encrypted");
                         alert.setTitle("Wallet Encrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING,
-                            "Wallet is already encrypted");
+                                "Wallet is already encrypted");
                         alert.setTitle("Wallet Already Encrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR,
-                            t.getMessage());
+                                t.getMessage());
                         alert.setTitle("Wallet Encryption Failed");
                         alert.showAndWait();
                     });
@@ -340,20 +342,20 @@ public class MainController {
         final Address address;
         final Coin amount;
         final Network network = walletNetworks.get(sendSelector.getValue());
-        
+
         try {
             address = Address.fromBase58(network.getParams(), sendAddress.getText());
-        } catch(AddressFormatException ex) {
+        } catch (AddressFormatException ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR, "The provided address is invalid: "
                     + ex.getMessage());
             alert.setTitle("Address Incorrect");
             alert.showAndWait();
             return;
         }
-        
+
         try {
             amount = Coin.parseCoin(sendAmount.getText());
-        } catch(IllegalArgumentException ex) {
+        } catch (IllegalArgumentException ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR, "The number of coins to send is invalid: "
                     + ex.getMessage());
             alert.setTitle("Amount Incorrect");
@@ -366,16 +368,16 @@ public class MainController {
         // TODO: Show details of fees and total including fees
         confirmSend.setTitle("Confirm Sending Coins");
         confirmSend.setHeaderText("Send "
-            + network.getParams().getMonetaryFormat().format(amount) + " to "
-            + address.toBase58() + "?");
+                + network.getParams().getMonetaryFormat().format(amount) + " to "
+                + address.toBase58() + "?");
         confirmSend.setContentText("You are about to send "
-            + network.getParams().getMonetaryFormat().format(amount) + " to "
-            + address.toBase58());
-        confirmSend.initOwner(((Node)event.getTarget()).getScene().getWindow());
+                + network.getParams().getMonetaryFormat().format(amount) + " to "
+                + address.toBase58());
+        confirmSend.initOwner(((Node) event.getTarget()).getScene().getWindow());
 
         confirmSend.showAndWait()
-            .filter(response -> response == ButtonType.OK)
-            .ifPresent(response -> doSendCoins(network, address, amount));
+                .filter(response -> response == ButtonType.OK)
+                .ifPresent(response -> doSendCoins(network, address, amount));
     }
 
     /**
@@ -402,30 +404,30 @@ public class MainController {
 
         try {
             network.sendCoins(req,
-            (Wallet.SendResult sendResult) -> {
-                // TODO: Can we do a "toast" pop up of some kind here?
-            }, (Coin missing) -> {
-                Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.WARNING);
-                    alert.setTitle("Insufficient Money");
-                    alert.setHeaderText("You don't have enough money!");
-                    alert.setContentText("You need "
-                            + (missing == null
-                                    ? "an unknown amount"
-                                    : network.format(missing))
-                            + " more");
+                    (Wallet.SendResult sendResult) -> {
+                        // TODO: Can we do a "toast" pop up of some kind here?
+                    }, (Coin missing) -> {
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.WARNING);
+                            alert.setTitle("Insufficient Money");
+                            alert.setHeaderText("You don't have enough money!");
+                            alert.setContentText("You need "
+                                    + (missing == null
+                                            ? "an unknown amount"
+                                            : network.format(missing))
+                                    + " more");
 
-                    alert.showAndWait();
-                });
-            }, (KeyCrypterException ex) -> {
-                Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.WARNING);
-                    alert.setTitle("Wallet Locked");
-                    alert.setHeaderText("Could Not Unlock Wallet");
-                    alert.setContentText("The provided password did not unlock the wallet, please try again");
-                    alert.showAndWait();
-                });
-            }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                            alert.showAndWait();
+                        });
+                    }, (KeyCrypterException ex) -> {
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.WARNING);
+                            alert.setTitle("Wallet Locked");
+                            alert.setHeaderText("Could Not Unlock Wallet");
+                            alert.setContentText("The provided password did not unlock the wallet, please try again");
+                            alert.showAndWait();
+                        });
+                    }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
             // TODO: Now what!?
             logger.error("Interrupted while pushing work to network thread.", ex);
@@ -460,7 +462,7 @@ public class MainController {
 
         // Pre-sort transactions by date
         final SortedSet<Transaction> rawTransactions = new TreeSet<>(
-            (Transaction a, Transaction b) -> a.getUpdateTime().compareTo(b.getUpdateTime())
+                (Transaction a, Transaction b) -> a.getUpdateTime().compareTo(b.getUpdateTime())
         );
         rawTransactions.addAll(wallet.getTransactions(false));
 
@@ -469,9 +471,9 @@ public class MainController {
         // or something more useful form Wallet
         // Meanwhile we do a bunch of duplicate work to recalculate these values,
         // here
-        for (Transaction tx: rawTransactions) {
+        for (Transaction tx : rawTransactions) {
             long valueChange = 0;
-            for (TransactionInput in: tx.getInputs()) {
+            for (TransactionInput in : tx.getInputs()) {
                 Coin balance = balances.get(in.getOutpoint());
                 // Spend the value on the listed input
                 if (balance != null) {
@@ -479,7 +481,7 @@ public class MainController {
                     balances.remove(in.getOutpoint());
                 }
             }
-            for (TransactionOutput out: tx.getOutputs()) {
+            for (TransactionOutput out : tx.getOutputs()) {
                 if (out.isMine(wallet)) {
                     valueChange += out.getValue().value;
                     Coin balance = balances.get(out.getOutPointFor());
@@ -517,12 +519,13 @@ public class MainController {
      */
     public List<Service> stop() {
         return networks.stream()
-            .map(network -> network.stopAsync() )
-            .collect(Collectors.toList());
+                .map(network -> network.stopAsync())
+                .collect(Collectors.toList());
     }
 
     private void showInternalError(Exception ex) {
-        Platform.runLater(() -> {Alert alert = new Alert(Alert.AlertType.ERROR);
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Internal Error");
             alert.setContentText(ex.getMessage());
             alert.showAndWait();
@@ -557,7 +560,7 @@ public class MainController {
         @Override
         public Wallet fromString(String string) {
             final NetworkParameters params = NetworkResolver.getParams(string);
-            for (Wallet wallet: wallets) {
+            for (Wallet wallet : wallets) {
                 if (wallet.getParams().equals(params)) {
                     return wallet;
                 }
@@ -567,12 +570,13 @@ public class MainController {
     }
 
     public static class WalletTransaction extends Object {
+
         private final NetworkParameters params;
         private final Transaction transaction;
         private final Coin balanceChange;
 
         private WalletTransaction(final NetworkParameters params,
-            final Transaction transaction, final Coin balanceChange) {
+                final Transaction transaction, final Coin balanceChange) {
             this.params = params;
             this.transaction = transaction;
             this.balanceChange = balanceChange;

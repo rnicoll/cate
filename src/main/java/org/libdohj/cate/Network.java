@@ -60,18 +60,19 @@ import org.slf4j.LoggerFactory;
 import org.spongycastle.crypto.params.KeyParameter;
 
 /**
- * Class which manages incoming events and knows which network they apply
- * to. In a conventional software wallet, this would be part of the main UI,
- * however here because we have multiple independent networks we expose them
- * as an API for the UI to aggregate.
+ * Class which manages incoming events and knows which network they apply to. In
+ * a conventional software wallet, this would be part of the main UI, however
+ * here because we have multiple independent networks we expose them as an API
+ * for the UI to aggregate.
  *
- * Each network has its own executor both so that bitcoinj context (which is held
- * in a thread store) is always correct for the network, and so that changes to
- * the contained wallet are guaranteed to be done in sequence but without blocking
- * UI. As such many calls here take callbacks which are called once work is
- * completed.
+ * Each network has its own executor both so that bitcoinj context (which is
+ * held in a thread store) is always correct for the network, and so that
+ * changes to the contained wallet are guaranteed to be done in sequence but
+ * without blocking UI. As such many calls here take callbacks which are called
+ * once work is completed.
  */
 public class Network extends WalletAppKit { // Thread implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+
     private final EventBridge eventBridge;
     final MainController controller;
     private final Logger logger = LoggerFactory.getLogger(Network.class);
@@ -79,14 +80,17 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
     private final SimpleObjectProperty<String> balance = new SimpleObjectProperty<>("0");
     private final SimpleIntegerProperty blocks = new SimpleIntegerProperty(0);
     private final SimpleIntegerProperty blocksLeft = new SimpleIntegerProperty(0);
-    /** Copy of the wallet encrypted state which we update if we change */
+    /**
+     * Copy of the wallet encrypted state which we update if we change
+     */
     private final SimpleBooleanProperty encrypted = new SimpleBooleanProperty();
     private final SimpleIntegerProperty peerCount = new SimpleIntegerProperty(0);
 
-    /** Transactions we've been notified of, either via onCoinsSent()
-     * or onCoinsReceived(). Used so we can filter out transactions that fire
-     * both events (i.e. a transaction that pays out, but also has change
-     * paying back to us).
+    /**
+     * Transactions we've been notified of, either via onCoinsSent() or
+     * onCoinsReceived(). Used so we can filter out transactions that fire both
+     * events (i.e. a transaction that pays out, but also has change paying back
+     * to us).
      */
     private final Set<Transaction> seenTransactions = new HashSet<>();
 
@@ -122,7 +126,7 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
                 blocks.set(Network.this.store().getChainHead().getHeight());
             } catch (BlockStoreException ex) {
                 logger.error("Error getting current chain head while starting wallet "
-                    + params.getId(), ex);
+                        + params.getId(), ex);
             }
             encrypted.set(wallet().isEncrypted());
             controller.registerWallet(Network.this, Network.this.wallet());
@@ -168,10 +172,10 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
     }
 
     /**
-     * Queue a request to decrypt this wallet. This returns immediately,
-     * as the actual work is done on the network thread in order to ensure the
-     * thread context is correct. Unhandled errors are reported back to Network.
-     * 
+     * Queue a request to decrypt this wallet. This returns immediately, as the
+     * actual work is done on the network thread in order to ensure the thread
+     * context is correct. Unhandled errors are reported back to Network.
+     *
      * @param password password to decrypt the wallet with
      * @param onSuccess callback on success
      * @param onWalletNotEncrypted callback if the wallet is not encrypted
@@ -180,9 +184,9 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
      * @param timeUnit time unit for the timeout
      */
     public void decrypt(String password, Consumer<Object> onSuccess,
-                        Consumer<Object> onWalletNotEncrypted,
-                        Consumer<KeyCrypterException> onCrypterError,
-                        final long timeout, final TimeUnit timeUnit)
+            Consumer<Object> onWalletNotEncrypted,
+            Consumer<KeyCrypterException> onCrypterError,
+            final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
         this.networkExecutor.execute((Runnable) () -> {
             final Wallet wallet = wallet();
@@ -198,7 +202,7 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
                         wallet().decrypt(keyCrypter.deriveKey(password));
                         encrypted.set(false);
                         onSuccess.accept(null);
-                    } catch(KeyCrypterException ex) {
+                    } catch (KeyCrypterException ex) {
                         onCrypterError.accept(ex);
                     }
                 }
@@ -207,10 +211,10 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
     }
 
     /**
-     * Queue a request to encrypt this wallet. This returns immediately,
-     * as the actual work is done on the network thread in order to ensure the
-     * thread context is correct.
-     * 
+     * Queue a request to encrypt this wallet. This returns immediately, as the
+     * actual work is done on the network thread in order to ensure the thread
+     * context is correct.
+     *
      * @param password password to encrypt the wallet with
      * @param onSuccess handler to be called on success
      * @param onWalletEncrypted callback if the wallet is not encrypted
@@ -219,9 +223,9 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
      * @param timeUnit time unit for the timeout
      */
     public void encrypt(final String password, final Consumer<Object> onSuccess,
-                        Consumer<Object> onWalletEncrypted,
-                        Consumer<KeyCrypterException> onCrypterError,
-                        final long timeout, final TimeUnit timeUnit)
+            Consumer<Object> onWalletEncrypted,
+            Consumer<KeyCrypterException> onCrypterError,
+            final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
         this.networkExecutor.execute((Runnable) () -> {
             final Wallet wallet = wallet();
@@ -238,7 +242,7 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
                     wallet().encrypt(keyCrypter, keyCrypter.deriveKey(password));
                     encrypted.set(true);
                     onSuccess.accept(null);
-                } catch(KeyCrypterException ex) {
+                } catch (KeyCrypterException ex) {
                     onCrypterError.accept(ex);
                 }
             }
@@ -246,21 +250,22 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
     }
 
     /**
-     * Queue a request to send coins to the given address. This returns immediately,
-     * as the actual work is done on the network thread in order to ensure the
-     * thread context is correct.
+     * Queue a request to send coins to the given address. This returns
+     * immediately, as the actual work is done on the network thread in order to
+     * ensure the thread context is correct.
      *
      * @param req the send coin request to pass to the wallet
      * @param onSuccess handler to be called on success
-     * @param onInsufficientFunds handler to be called if the user lacks sufficient funds
+     * @param onInsufficientFunds handler to be called if the user lacks
+     * sufficient funds
      * @param timeout timeout on queueing the work request
      * @param timeUnit time unit for the timeout
      */
     public void sendCoins(final Wallet.SendRequest req,
-                          final Consumer<SendResult> onSuccess,
-                          final Consumer<Coin> onInsufficientFunds,
-                          final Consumer<KeyCrypterException> onWalletLocked,
-                          final long timeout, final TimeUnit timeUnit)
+            final Consumer<SendResult> onSuccess,
+            final Consumer<Coin> onInsufficientFunds,
+            final Consumer<KeyCrypterException> onWalletLocked,
+            final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
         this.networkExecutor.execute((Runnable) () -> {
             // TODO: Calculate fees in a network-appropriate way
@@ -270,7 +275,7 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
                 onSuccess.accept(result);
             } catch (InsufficientMoneyException ex) {
                 onInsufficientFunds.accept(ex.missing);
-            } catch(KeyCrypterException ex) {
+            } catch (KeyCrypterException ex) {
                 onWalletLocked.accept(ex);
             } finally {
                 // Wipe the key to ensure if it's stored in insecure memory, it's all
@@ -300,8 +305,9 @@ public class Network extends WalletAppKit { // Thread implements NewBestBlockLis
     }
 
     public class EventBridge implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+
         private EventBridge() {
-            
+
         }
 
         @Override

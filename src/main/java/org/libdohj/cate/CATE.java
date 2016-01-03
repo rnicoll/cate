@@ -33,8 +33,9 @@ import org.libdohj.cate.util.DataDirFactory;
  * @author Ross Nicoll
  */
 public class CATE extends Application {
+
     private static final String APPLICATION_NAME_FOLDER = "CATE";
-    private static Logger logger  = Logger.getLogger(CATE.class.getName());
+    private static Logger logger = Logger.getLogger(CATE.class.getName());
     private static final DataDirFactory dataDirFactory = new DataDirFactory(APPLICATION_NAME_FOLDER);
 
     private static File dataDir = null;
@@ -42,7 +43,7 @@ public class CATE extends Application {
     private MainController controller;
 
     @Override
-    public void start(Stage primaryStage) throws Exception{
+    public void start(Stage primaryStage) throws Exception {
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/main.fxml"));
         Parent root = loader.load();
 

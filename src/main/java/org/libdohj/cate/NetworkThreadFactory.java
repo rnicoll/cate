@@ -23,6 +23,7 @@ import org.bitcoinj.core.Context;
  * @author Ross Nicoll
  */
 public class NetworkThreadFactory implements ThreadFactory {
+
     private final Context context;
     private final ThreadGroup group;
     private int threadCount = 0;
@@ -35,7 +36,7 @@ public class NetworkThreadFactory implements ThreadFactory {
     @Override
     public Thread newThread(Runnable r) {
         final String name = context.getParams().getId() + " worker #"
-            + (++threadCount);
+                + (++threadCount);
         return new Thread(group, () -> {
             Context.propagate(context);
             r.run();
