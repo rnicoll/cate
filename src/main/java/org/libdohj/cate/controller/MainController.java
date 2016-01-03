@@ -15,6 +15,7 @@
  */
 package org.libdohj.cate.controller;
 
+import java.io.File;
 import java.text.DateFormat;
 import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
@@ -63,7 +64,6 @@ import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
-import org.libdohj.cate.CATE;
 
 import org.libdohj.cate.Network;
 import org.slf4j.Logger;
@@ -132,10 +132,6 @@ public class MainController {
         initializeWalletList();
         initializeTransactionList();
 
-        networks.add(new Network(NetworkResolver.getParams("Dogecoin"), this, CATE.getDataDir()));
-        networks.add(new Network(NetworkResolver.getParams("Dogecoin test"), this, CATE.getDataDir()));
-        networks.stream().forEach(network -> network.startAsync());
-
         receiveSelector.setOnAction((ActionEvent event) -> {
             if (event.getTarget().equals(receiveSelector)) {
                 final Wallet wallet = (Wallet) receiveSelector.getValue();
@@ -146,13 +142,19 @@ public class MainController {
             }
         });
 
-        sendButton.setOnAction((ActionEvent event) -> {
-            sendCoinsOnUIThread(event);
-        });
+        sendButton.setOnAction((ActionEvent event) -> { sendCoinsOnUIThread(event); });
 
         menuExit.setOnAction((ActionEvent event) -> {
             Platform.exit();
         });
+    }
+
+    public void connectTo(String name, File dataDir)
+    {
+        NetworkParameters params = NetworkResolver.getParams(name); //TODO error handling (nullptr)
+        Network network = new Network(params, this, dataDir);
+        networks.add(network);
+        network.startAsync(); //TODO consider doing this elsewhere too?
     }
 
     private void initializeTransactionList() {
@@ -261,14 +263,14 @@ public class MainController {
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING,
-                                "Wallet is already decrypted");
+                            "Wallet is already decrypted");
                         alert.setTitle("Wallet Already Decrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR,
-                                t.getMessage());
+                            t.getMessage());
                         alert.setTitle("Wallet Decryption Failed");
                         alert.showAndWait();
                     });
@@ -304,21 +306,21 @@ public class MainController {
                 network.encrypt(value, o -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                                "Wallet successfully encrypted");
+                            "Wallet successfully encrypted");
                         alert.setTitle("Wallet Encrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING,
-                                "Wallet is already encrypted");
+                            "Wallet is already encrypted");
                         alert.setTitle("Wallet Already Encrypted");
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR,
-                                t.getMessage());
+                            t.getMessage());
                         alert.setTitle("Wallet Encryption Failed");
                         alert.showAndWait();
                     });
@@ -364,12 +366,12 @@ public class MainController {
         // TODO: Show details of fees and total including fees
         confirmSend.setTitle("Confirm Sending Coins");
         confirmSend.setHeaderText("Send "
-                + network.getParams().getMonetaryFormat().format(amount) + " to "
-                + address.toBase58() + "?");
+            + network.getParams().getMonetaryFormat().format(amount) + " to "
+            + address.toBase58() + "?");
         confirmSend.setContentText("You are about to send "
-                + network.getParams().getMonetaryFormat().format(amount) + " to "
-                + address.toBase58());
-        confirmSend.initOwner(((Node) event.getTarget()).getScene().getWindow());
+            + network.getParams().getMonetaryFormat().format(amount) + " to "
+            + address.toBase58());
+        confirmSend.initOwner(((Node)event.getTarget()).getScene().getWindow());
 
         confirmSend.showAndWait()
             .filter(response -> response == ButtonType.OK)
