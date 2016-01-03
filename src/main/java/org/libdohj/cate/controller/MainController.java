@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Ross Nicoll.
+ * Copyright 2015, 2016 Ross Nicoll.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,7 @@ import javafx.util.StringConverter;
 
 
 import com.google.common.util.concurrent.Service;
+import java.util.stream.Collectors;
 import org.spongycastle.crypto.params.KeyParameter;
 
 import org.bitcoinj.core.Address;
@@ -155,7 +156,7 @@ public class MainController {
 
         networks.add(new Network(networksByName.get("Dogecoin"), this, CATE.getDataDir()));
         networks.add(new Network(networksByName.get("Dogecoin test"), this, CATE.getDataDir()));
-        networks.stream().forEach((network) -> { network.start(); });
+        networks.stream().forEach(network -> network.startAsync());
 
         receiveSelector.setOnAction((ActionEvent event) -> {
             if (event.getTarget().equals(receiveSelector)) {
@@ -541,30 +542,9 @@ public class MainController {
      * @return a list of services which have been notified to stop.
      */
     public List<Service> stop() {
-        final List<Service> services = new ArrayList<>(networks.size());
-        final List<Network> stuckNetworks = new ArrayList<>();
-
-        // Tell all the networks to shut down
-        networks.stream().forEach((network) -> { services.add(network.cancel()); });
-
-        // Try joining all the thread, note which we fail on
-        for (Network network: networks) {
-            try {
-                network.join(Network.POLL_INTERVAL_MILLIS * 2, 0);
-            } catch (InterruptedException ex) {
-                // Ignore
-            }
-            if (network.isAlive()) {
-                stuckNetworks.add(network);
-            }
-        }
-
-        if (!stuckNetworks.isEmpty()) {
-            // Interrupt any networks that are still running
-            stuckNetworks.stream().forEach((network) -> { network.interrupt(); });
-        }
-
-        return services;
+        return networks.stream()
+            .map(network -> network.stopAsync() )
+            .collect(Collectors.toList());
     }
 
     private void showInternalError(Exception ex) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 jrn.
+ * Copyright 2015, 2016 Ross Nicoll.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -30,7 +31,6 @@ import javafx.beans.value.ObservableValue;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.value.ObservableBooleanValue;
 
-import com.google.common.util.concurrent.Service;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.FilteredBlock;
@@ -65,32 +65,16 @@ import org.spongycastle.crypto.params.KeyParameter;
  * however here because we have multiple independent networks we expose them
  * as an API for the UI to aggregate.
  *
- * Each network has its own thread both so that bitcoinj context (which is held
+ * Each network has its own executor both so that bitcoinj context (which is held
  * in a thread store) is always correct for the network, and so that changes to
- * the contained wallet are guaranteed to be done one at a time. As such many
- * calls here take callbacks which are called once work is completed.
- *
- * While in theory we could make this an Executor and then share it with
- * WalletAppKit, it's useful to know that any work sent to the network is
- * executed in-order.
+ * the contained wallet are guaranteed to be done in sequence but without blocking
+ * UI. As such many calls here take callbacks which are called once work is
+ * completed.
  */
-public class Network extends Thread implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
-    /**
-     * Interval between checking of the network has been told to shut down.
-     */
-    public static final long POLL_INTERVAL_MILLIS = 250;
-    private static final int WORK_QUEUE_SIZE = 20;
-
-    private final File dataDir;
-    private final NetworkParameters params;
-    private WalletAppKit kit;
-    private boolean synced = false;
-    private final MainController controller;
+public class Network extends WalletAppKit { // Thread implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+    private final EventBridge eventBridge;
+    final MainController controller;
     private final Logger logger = LoggerFactory.getLogger(Network.class);
-
-    /** Work queue for the thread once the kit has been started */
-    private final ArrayBlockingQueue<Work> workQueue = new ArrayBlockingQueue<>(WORK_QUEUE_SIZE);
-    private boolean cancelled = false;
 
     private final SimpleObjectProperty<String> balance = new SimpleObjectProperty<>("0");
     private final SimpleIntegerProperty blocks = new SimpleIntegerProperty(0);
@@ -106,82 +90,43 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
      */
     private final Set<Transaction> seenTransactions = new HashSet<>();
 
+    private ExecutorService networkExecutor;
+
     /**
      * @param params network this manages.
      * @param controller the controller to push events back to.
-     * @param dataDir the data directory to store the wallet and SPV chain in.
+     * @param directory the data directory to store the wallet and SPV chain in.
      */
     public Network(final NetworkParameters params, final MainController controller,
-            final File dataDir) {
+            final File directory) {
+        super(params, directory, "cate_" + params.getId());
         this.controller = controller;
-        this.params = params;
-        this.dataDir = dataDir;
+        this.eventBridge = new EventBridge();
+        autoStop = false;
+        blockingStartup = true;
     }
 
     @Override
-    public void onBlocksDownloaded(Peer peer, Block block, FilteredBlock filteredBlock, int blocksLeft) {
-        if (blocksLeft <= 0) {
-            synced = true;
-        }
-        this.blocksLeft.set(blocksLeft);
-    }
+    protected void onSetupCompleted() {
+        networkExecutor = Executors.newFixedThreadPool(1, new NetworkThreadFactory(context));
 
-    @Override
-    public void onChainDownloadStarted(Peer peer, int blocksLeft) {
-        this.blocksLeft.set(blocksLeft);
-    }
+        peerGroup().setConnectTimeoutMillis(1000);
+        peerGroup().addDataEventListener(eventBridge);
+        peerGroup().addConnectionEventListener(eventBridge);
+        chain().addNewBestBlockListener(eventBridge);
+        wallet().addCoinEventListener(eventBridge);
 
-    @Override
-    public void notifyNewBestBlock(StoredBlock block) throws VerificationException {
-        this.blocks.set(block.getHeight());
-    }
-
-    @Override
-    public Message onPreMessageReceived(Peer peer, Message m) {
-        return null;
-    }
-
-    @Override
-    public List<Message> getData(Peer peer, GetDataMessage m) {
-        return null;
-    }
-
-    @Override
-    public void onPeersDiscovered(Set<PeerAddress> peerAddresses) {
-    }
-
-    @Override
-    public void onPeerConnected(Peer peer, int peerCount) {
-        this.peerCount.set(peerCount);
-    }
-
-    @Override
-    public void onPeerDisconnected(Peer peer, int peerCount) {
-        this.peerCount.set(peerCount);
-    }
-
-    @Override
-    public void onCoinsReceived(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
-        if (seenTransactions.add(tx)) {
-            controller.addTransaction(params, tx, prevBalance, newBalance);
-        }
-        balance.set(newBalance.toPlainString());
-    }
-
-    @Override
-    public void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
-        if (seenTransactions.add(tx)) {
-            controller.addTransaction(params, tx, prevBalance, newBalance);
-        }
-        balance.set(newBalance.toPlainString());
-        // TODO: Update the displayed receive address
-    }
-
-    /**
-     * @return the wallet kit
-     */
-    private WalletAppKit getKit() {
-        return kit;
+        networkExecutor.execute((Runnable) () -> {
+            balance.set(Network.this.wallet().getBalance().toPlainString());
+            try {
+                blocks.set(Network.this.store().getChainHead().getHeight());
+            } catch (BlockStoreException ex) {
+                logger.error("Error getting current chain head while starting wallet "
+                    + params.getId(), ex);
+            }
+            encrypted.set(wallet().isEncrypted());
+            controller.registerWallet(Network.this, Network.this.wallet());
+        });
     }
 
     public ObservableValue<String> getObservableBalance() {
@@ -209,64 +154,10 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
     }
 
     @Override
-    public void run() {
-        kit = new WalletAppKit(params, dataDir, "cate_" + params.getId()) {
-            @Override
-            protected void onSetupCompleted() {
-                peerGroup().setConnectTimeoutMillis(1000);
-                peerGroup().addDataEventListener(Network.this);
-                peerGroup().addConnectionEventListener(Network.this);
-                chain().addNewBestBlockListener(Network.this);
-                wallet().addCoinEventListener(Network.this);
-
-                Network.this.workQueue.offer((Work) () -> {
-                    balance.set(Network.this.getKit().wallet().getBalance().toPlainString());
-                    try {
-                        blocks.set(Network.this.getKit().store().getChainHead().getHeight());
-                    } catch (BlockStoreException ex) {
-                        logger.error("Error getting current chain head while starting wallet "
-                            + params.getId(), ex);
-                    }
-                    encrypted.set(wallet().isEncrypted());
-                    controller.registerWallet(Network.this, Network.this.getKit().wallet());
-                });
-            }
-        };
-        kit.setAutoStop(false);
-        kit.setBlockingStartup(false);
-        kit.startAsync();
-
-        while (!cancelled) {
-            final Work work;
-            try {
-                work = Network.this.workQueue.poll(POLL_INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
-            } catch(InterruptedException ex) {
-                // Loop around to test for cancelled state again automatically
-                continue;
-            }
-            if (null != work) {
-                try {
-                    work.run();
-                } catch(Exception ex) {
-                    // TODO: Now what!?
-                    logger.error("Error running work for network "
-                        + params.getId(), ex);
-                    this.controller.handleNetworkError(this, ex);
-                }
-            }
-        }
-    }
-
-    /**
-     * Cancel the network task. This does not interrupt the thread, but instead
-     * relies on timeouts to ensure the cancellation is seen quickly.
-     * 
-     * @return the stopped kit service.
-     */
-    public Service cancel() {
-        this.cancelled = true;
-        final Service service = kit.stopAsync();
-        return service;
+    protected void shutDown() throws Exception {
+        this.networkExecutor.shutdown();
+        super.shutDown();
+        this.networkExecutor.awaitTermination(1, TimeUnit.SECONDS);
     }
 
     /**
@@ -293,18 +184,18 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
                         Consumer<KeyCrypterException> onCrypterError,
                         final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
-        this.workQueue.offer((Work) () -> {
-            final Wallet wallet = kit.wallet();
+        this.networkExecutor.execute((Runnable) () -> {
+            final Wallet wallet = wallet();
             if (!wallet.isEncrypted()) {
                 onCrypterError.accept(null);
             } else {
-                final KeyCrypter keyCrypter = kit.wallet().getKeyCrypter();
+                final KeyCrypter keyCrypter = wallet().getKeyCrypter();
 
                 if (keyCrypter == null) {
                     this.controller.handleNetworkError(this, new IllegalStateException("Wallet is encrypted but has no key crypter."));
                 } else {
                     try {
-                        kit.wallet().decrypt(keyCrypter.deriveKey(password));
+                        wallet().decrypt(keyCrypter.deriveKey(password));
                         encrypted.set(false);
                         onSuccess.accept(null);
                     } catch(KeyCrypterException ex) {
@@ -332,19 +223,19 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
                         Consumer<KeyCrypterException> onCrypterError,
                         final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
-        this.workQueue.offer((Work) () -> {
-            final Wallet wallet = kit.wallet();
+        this.networkExecutor.execute((Runnable) () -> {
+            final Wallet wallet = wallet();
             if (wallet.isEncrypted()) {
                 onWalletEncrypted.accept(null);
             } else {
-                KeyCrypter keyCrypter = kit.wallet().getKeyCrypter();
+                KeyCrypter keyCrypter = wallet().getKeyCrypter();
 
                 if (keyCrypter == null) {
                     keyCrypter = new KeyCrypterScrypt();
                 }
 
                 try {
-                    kit.wallet().encrypt(keyCrypter, keyCrypter.deriveKey(password));
+                    wallet().encrypt(keyCrypter, keyCrypter.deriveKey(password));
                     encrypted.set(true);
                     onSuccess.accept(null);
                 } catch(KeyCrypterException ex) {
@@ -371,11 +262,11 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
                           final Consumer<KeyCrypterException> onWalletLocked,
                           final long timeout, final TimeUnit timeUnit)
             throws InterruptedException {
-        this.workQueue.offer((Work) () -> {
+        this.networkExecutor.execute((Runnable) () -> {
             // TODO: Calculate fees in a network-appropriate way
             final SendResult result;
             try {
-                result = Network.this.getKit().wallet().sendCoins(req);
+                result = Network.this.wallet().sendCoins(req);
                 onSuccess.accept(result);
             } catch (InsufficientMoneyException ex) {
                 onInsufficientFunds.accept(ex.missing);
@@ -400,15 +291,73 @@ public class Network extends Thread implements NewBestBlockListener, PeerDataEve
      * @throws IllegalStateException if the wallet is not encrypted
      */
     public KeyParameter getKeyFromPassword(String password) throws IllegalStateException {
-        final KeyCrypter keyCrypter = kit.wallet().getKeyCrypter();
-        if (keyCrypter == null) {
+        final KeyCrypter keyCrypter = wallet().getKeyCrypter();
+        if (keyCrypter != null) {
             return keyCrypter.deriveKey(password);
         } else {
             throw new IllegalStateException("Wallet does not have a key crypter.");
         }
     }
 
-    private interface Work {
-        public void run() throws Exception;
+    public class EventBridge implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+        private EventBridge() {
+            
+        }
+
+        @Override
+        public void onBlocksDownloaded(Peer peer, Block block, FilteredBlock filteredBlock, int blocksLeft) {
+            Network.this.blocksLeft.set(blocksLeft);
+        }
+
+        @Override
+        public void onChainDownloadStarted(Peer peer, int blocksLeft) {
+            Network.this.blocksLeft.set(blocksLeft);
+        }
+
+        @Override
+        public void notifyNewBestBlock(StoredBlock block) throws VerificationException {
+            Network.this.blocks.set(block.getHeight());
+        }
+
+        @Override
+        public Message onPreMessageReceived(Peer peer, Message m) {
+            return null;
+        }
+
+        @Override
+        public List<Message> getData(Peer peer, GetDataMessage m) {
+            return null;
+        }
+
+        @Override
+        public void onPeersDiscovered(Set<PeerAddress> peerAddresses) {
+        }
+
+        @Override
+        public void onPeerConnected(Peer peer, int peerCount) {
+            Network.this.peerCount.set(peerCount);
+        }
+
+        @Override
+        public void onPeerDisconnected(Peer peer, int peerCount) {
+            Network.this.peerCount.set(peerCount);
+        }
+
+        @Override
+        public void onCoinsReceived(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
+            if (seenTransactions.add(tx)) {
+                controller.addTransaction(params, tx, prevBalance, newBalance);
+            }
+            balance.set(newBalance.toPlainString());
+        }
+
+        @Override
+        public void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
+            if (seenTransactions.add(tx)) {
+                controller.addTransaction(params, tx, prevBalance, newBalance);
+            }
+            balance.set(newBalance.toPlainString());
+            // TODO: Update the displayed receive address
+        }
     }
 }
