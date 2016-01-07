@@ -71,10 +71,10 @@ import org.spongycastle.crypto.params.KeyParameter;
  * without blocking UI. As such many calls here take callbacks which are called
  * once work is completed.
  */
-public class Network extends WalletAppKit { // Thread implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+public class Network extends WalletAppKit {
 
     private final EventBridge eventBridge;
-    final MainController controller;
+    private final MainController controller;
     private final Logger logger = LoggerFactory.getLogger(Network.class);
 
     private final SimpleObjectProperty<String> balance = new SimpleObjectProperty<>("0");

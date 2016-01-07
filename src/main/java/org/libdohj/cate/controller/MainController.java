@@ -153,7 +153,7 @@ public class MainController {
     }
 
     public void connectTo(String name, File dataDir) {
-        NetworkParameters params = NetworkResolver.getParams(name); //TODO error handling (nullptr)
+        NetworkParameters params = NetworkResolver.getParameter(name); //TODO error handling (nullptr)
         Network network = new Network(params, this, dataDir);
         networks.add(network);
         network.startAsync(); //TODO consider doing this elsewhere too?
@@ -559,7 +559,7 @@ public class MainController {
 
         @Override
         public Wallet fromString(String string) {
-            final NetworkParameters params = NetworkResolver.getParams(string);
+            final NetworkParameters params = NetworkResolver.getParameter(string);
             for (Wallet wallet : wallets) {
                 if (wallet.getParams().equals(params)) {
                     return wallet;
