@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.geometry.*?>
 <?import javafx.scene.text.*?>
 <?import javafx.scene.control.*?>
 <?import java.lang.*?>
@@ -17,9 +18,9 @@
 
     <top>
         <MenuBar>
-            <Menu text="File">
-                <MenuItem fx:id="menuExit" text="Quit CATE" />
-            </Menu> 
+            <Menu text="%fileMenuText">
+                <MenuItem fx:id="menuExit" text="%fileMenuText.exit" />
+            </Menu>
         </MenuBar>
     </top>
 
@@ -32,13 +33,13 @@
                 <VBox.margin>
                     <Insets bottom="5.0" left="0.0" right="0.0" top="10.0"/>
                 </VBox.margin>
-                <Label text="Receive address:">
+                <Label text="%walletReceive.addressLabel">
                     <HBox.margin>
                         <Insets bottom="0.0" left="0.0" right="10.0" top="0.0"/>
                     </HBox.margin>
                 </Label>
                 <ComboBox fx:id="receiveSelector" prefWidth="120" />
-                <TextField fx:id="myAddress" editable="false" minWidth="260" />
+                <TextField fx:id="myAddress" editable="false" minWidth="260"/>
             </HBox>
 
             <TableView fx:id="txList" VBox.vgrow="ALWAYS">
@@ -46,10 +47,10 @@
                     <Insets bottom="5.0" left="0.0" right="0.0" top="5.0"/>
                 </VBox.margin>
                 <columns>
-                    <TableColumn fx:id="txNetworkColumn" text="Wallet" prefWidth="100" />
-                    <TableColumn fx:id="txDateColumn" text="Date" prefWidth="100" />
-                    <TableColumn fx:id="txAmountColumn" text="Amount" prefWidth="100" />
-                    <TableColumn fx:id="txLabelColumn" text="Label" prefWidth="200" />
+                    <TableColumn fx:id="txNetworkColumn" text="%txlist.txNetworkColumn.thead" prefWidth="100" />
+                    <TableColumn fx:id="txDateColumn" text="%txlist.txDateColumn.thead" prefWidth="100" />
+                    <TableColumn fx:id="txAmountColumn" text="%txlist.txAmountColumn.thead" prefWidth="100" />
+                    <TableColumn fx:id="txLabelColumn" text="%txlist.txLabelColumn.thead" prefWidth="200" />
                 </columns>
             </TableView>
 
@@ -58,10 +59,10 @@
                     <Insets bottom="10.0" left="0.0" right="0.0" top="5.0"/>
                 </VBox.margin>
                 <ComboBox fx:id="sendSelector" GridPane.columnIndex="0" GridPane.rowIndex="0" prefWidth="120" />
-                <TextField fx:id="sendAddress" promptText="Address" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.columnSpan="3" minWidth="260" />
+                <TextField fx:id="sendAddress" promptText="%walletSend.sendAddress" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.columnSpan="3" minWidth="260" />
 
-                <TextField fx:id="sendAmount" promptText="Amount" prefWidth="100" GridPane.columnIndex="1" GridPane.rowIndex="1" />
-                <Button fx:id="sendButton" mnemonicParsing="false" text="Send" GridPane.columnIndex="2" GridPane.rowIndex="1" />
+                <TextField fx:id="sendAmount" promptText="%walletSend.sendAmount" prefWidth="100" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                <Button fx:id="sendButton" mnemonicParsing="false" text="%walletSend.sendButton" GridPane.columnIndex="2" GridPane.rowIndex="1" />
             </GridPane>
         </VBox>
     </center>
@@ -71,13 +72,13 @@
             <BorderPane.margin>
                 <Insets bottom="10.0" left="5.0" right="10.0" top="10.0"/>
             </BorderPane.margin>
-            <Label text="Wallets" VBox.vgrow="NEVER" />
+            <Label text="%walletList.label" VBox.vgrow="NEVER" />
             <TableView fx:id="walletList" VBox.vgrow="ALWAYS">
                 <columns>
-                    <TableColumn fx:id="networkName" text="Wallet" prefWidth="100" />
-                    <TableColumn fx:id="networkBalance" text="Balance" prefWidth="60" resizable="true" />
-                    <TableColumn fx:id="networkBlocks" text="Blocks" prefWidth="60" />
-                    <TableColumn fx:id="networkPeers" text="Peers" prefWidth="60" />
+                    <TableColumn fx:id="networkName" text="%walletList.networkName.thead" prefWidth="100" />
+                    <TableColumn fx:id="networkBalance" text="%walletList.networkBalance.thead" prefWidth="60" resizable="true" />
+                    <TableColumn fx:id="networkBlocks" text="%walletList.networkBlocks.thead" prefWidth="60" />
+                    <TableColumn fx:id="networkPeers" text="%walletList.networkPeers.thead" prefWidth="60" />
                 </columns>
             </TableView>
         </VBox>
