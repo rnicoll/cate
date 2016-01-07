@@ -38,3 +38,18 @@ the latest code.
 Once that is done, clone the CATE repository and run "mvn package" to build it.
 This will produce an JAR file "target/cate-0.14-SNAPSHOT-exe.jar", double click
 it to run.
+
+Contributing
+------------
+
+Contributions to the code and documentation are greatly appreciated. A list of
+tasks needing work is maintained on Github at
+[https://github.com/rnicoll/cate/issues](https://github.com/rnicoll/cate/issues),
+but obviously do feel free to submit other improvements. Contributions should
+be raised as a pull request against the project for code review.
+
+Code style should follow the [Google Java guidelines](https://google.github.io/styleguide/javaguide.html),
+and in cases where existing code does not conform to those guidelines, please
+raise a pull request to correct the style. Please however raise this as its own
+pull request, do not mix with other pull requests, so it's clear why code has
+been changed.
