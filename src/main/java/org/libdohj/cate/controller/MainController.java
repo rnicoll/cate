@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -35,16 +36,21 @@ import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.Node;
+import javafx.scene.layout.GridPane;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
@@ -247,11 +253,31 @@ public class MainController {
             return;
         }
 
-        TextInputDialog dialog = new TextInputDialog();
-
+        Dialog<String> dialog = new Dialog<>();
         dialog.setTitle("Wallet Password");
-        dialog.setHeaderText("Enter Password to Decrypt");
-        dialog.setContentText("Please enter the wallet password to decrypt the wallet:");
+        dialog.setHeaderText("Please enter the wallet password to decrypt the wallet");
+
+        PasswordField pass = new PasswordField();
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.add(new Label("Password:"), 0, 0);
+        grid.add(pass, 1, 0);
+
+        ButtonType buttonTypeOk = new ButtonType("Okay", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(buttonTypeOk, ButtonType.CANCEL);
+
+        dialog.getDialogPane().setContent(grid);
+
+        Platform.runLater(pass::requestFocus);
+
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == buttonTypeOk) {
+                return pass.getText();
+            }
+            return null;
+        });
 
         dialog.showAndWait().ifPresent(value -> {
             try {
@@ -296,40 +322,79 @@ public class MainController {
             return;
         }
 
-        TextInputDialog dialog = new TextInputDialog();
-
+        Dialog<String> dialog = new Dialog<>();
         dialog.setTitle("Wallet Password");
-        dialog.setHeaderText("Enter Password to Encrypt");
-        dialog.setContentText("Please enter the wallet password to encrypt the wallet:");
+        dialog.setHeaderText("Please enter the wallet password to encrypt the wallet");
 
-        // TODO: Confirm the password a second time in case of typos
+        PasswordField pass1 = new PasswordField();
+        PasswordField pass2 = new PasswordField();
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.add(new Label("New Password:"), 0, 0);
+        grid.add(pass1, 1, 0);
+        grid.add(new Label("Repeat Password:"), 0, 1);
+        grid.add(pass2, 1, 1);
+
+        ButtonType buttonTypeOk = new ButtonType("Okay", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(buttonTypeOk, ButtonType.CANCEL);
+
+        dialog.getDialogPane().setContent(grid);
+
+        Platform.runLater(pass1::requestFocus);
+
+        dialog.setResultConverter(dialogButton -> {
+            if (dialogButton == buttonTypeOk) {
+                if (!pass1.getText().trim().isEmpty() && !pass2.getText().trim().isEmpty()) {
+                    if (Objects.equals(pass1.getText(), pass2.getText())) {
+                        return pass1.getText();
+                    } else {
+                        return "False";
+                    }
+                } else {
+                    return "False";
+                }
+            }
+            return null;
+        });
+
         dialog.showAndWait().ifPresent(value -> {
-            try {
-                network.encrypt(value, o -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                                "Wallet successfully encrypted");
-                        alert.setTitle("Wallet Encrypted");
-                        alert.showAndWait();
-                    });
-                }, t -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.WARNING,
-                                "Wallet is already encrypted");
-                        alert.setTitle("Wallet Already Encrypted");
-                        alert.showAndWait();
-                    });
-                }, t -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.ERROR,
-                                t.getMessage());
-                        alert.setTitle("Wallet Encryption Failed");
-                        alert.showAndWait();
-                    });
-                }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException ex) {
-                // TODO: Now what!?
-                logger.error("Interrupted while pushing work to network thread.", ex);
+            if (Objects.equals(value, "False")) {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                            "Passwords did not match");
+                    alert.setTitle("Wallet Encryption Failed");
+                    alert.showAndWait();
+                });
+            } else {
+                try {
+                    network.encrypt(value, o -> {
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                                    "Wallet successfully encrypted");
+                            alert.setTitle("Wallet Encrypted");
+                            alert.showAndWait();
+                        });
+                    }, t -> {
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.WARNING,
+                                    "Wallet is already encrypted");
+                            alert.setTitle("Wallet Already Encrypted");
+                            alert.showAndWait();
+                        });
+                    }, t -> {
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.ERROR,
+                                    t.getMessage());
+                            alert.setTitle("Wallet Encryption Failed");
+                            alert.showAndWait();
+                        });
+                    }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException ex) {
+                    // TODO: Now what!?
+                    logger.error("Interrupted while pushing work to network thread.", ex);
+                }
             }
         });
     }
