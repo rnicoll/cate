@@ -16,6 +16,8 @@
 package org.libdohj.cate;
 
 import java.io.File;
+import java.util.Locale;
+import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javafx.application.Application;
@@ -44,7 +46,12 @@ public class CATE extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/main.fxml"));
+        // This line to resolve keys against Bundle_de_DE.properties
+        //ResourceBundle i18nBundle = ResourceBundle.getBundle("i18n.Bundle", new Locale("de", "DE"));
+        // This line to resolve keys against the environment locale properties
+        ResourceBundle i18nBundle = ResourceBundle.getBundle("i18n.Bundle");
+
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/main.fxml"), i18nBundle);
         Parent root = loader.load();
 
         this.controller = (MainController) loader.getController();
@@ -52,7 +59,7 @@ public class CATE extends Application {
         this.controller.connectTo("Dogecoin", dataDir);
         this.controller.connectTo("Dogecoin test", dataDir);
 
-        primaryStage.setTitle("CATE");
+        primaryStage.setTitle(i18nBundle.getString("application.title"));
         primaryStage.setScene(new Scene(root, 800, 500));
         primaryStage.show();
     }
@@ -66,7 +73,8 @@ public class CATE extends Application {
         try {
             dataDir = dataDirFactory.get();
         } catch (DataDirFactory.UnableToDetermineDataDirException ex) {
-            logger.log(Level.SEVERE, "Unable to determine path to Data Directory", ex);
+            ResourceBundle i18nBundle = ResourceBundle.getBundle("i18n.Bundle");
+            logger.log(Level.SEVERE, i18nBundle.getString("alert.datadirError"), ex);
             System.exit(1);
         }
 

@@ -27,6 +27,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.ResourceBundle;
 
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
@@ -84,6 +85,9 @@ import org.slf4j.LoggerFactory;
 public class MainController {
 
     private static final int NETWORK_PUSH_TIMEOUT_MILLIS = 500;
+
+    @FXML // ResourceBundle that was given to the FXMLLoader
+    private ResourceBundle resources;
 
     @FXML
     private MenuItem menuExit;
@@ -188,8 +192,8 @@ public class MainController {
         walletList.setRowFactory(view -> {
             final TableRow<Network> row = new TableRow<>();
             final ContextMenu rowMenu = new ContextMenu();
-            final MenuItem encryptItem = new MenuItem("Encrypt Wallet");
-            final MenuItem decryptItem = new MenuItem("Decrypt Wallet");
+            final MenuItem encryptItem = new MenuItem(resources.getString("menuItem.encrypt"));
+            final MenuItem decryptItem = new MenuItem(resources.getString("menuItem.decrypt"));
 
             // TODO: Enable/disable options based on whether the wallet is locked.
             // Alternatively have two different context menus that display different
@@ -247,25 +251,25 @@ public class MainController {
      */
     private void decryptWalletOnUIThread(final Network network) {
         if (!network.getObservableEncryptedState().getValue()) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "Cannot decrypt wallet because it is not encrypted.");
-            alert.setTitle("Wallet Is Not Encrypted");
+            Alert alert = new Alert(Alert.AlertType.ERROR,resources.getString("alert.walletUnencrypted.msg"));
+            alert.setTitle(resources.getString("alert.walletUnencrypted.title"));
             alert.showAndWait();
             return;
         }
 
         Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle("Wallet Password");
-        dialog.setHeaderText("Please enter the wallet password to decrypt the wallet");
+        dialog.setTitle(resources.getString("dialogDecrypt.title"));
+        dialog.setHeaderText(resources.getString("dialogDecrypt.msg"));
 
         PasswordField pass = new PasswordField();
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
-        grid.add(new Label("Password:"), 0, 0);
+        grid.add(new Label(resources.getString("dialogDecrypt.label")), 0, 0);
         grid.add(pass, 1, 0);
 
-        ButtonType buttonTypeOk = new ButtonType("Okay", ButtonBar.ButtonData.OK_DONE);
+        ButtonType buttonTypeOk = new ButtonType(resources.getString("buttonType.Ok"), ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(buttonTypeOk, ButtonType.CANCEL);
 
         dialog.getDialogPane().setContent(grid);
@@ -284,28 +288,28 @@ public class MainController {
                 network.decrypt(value, o -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                        alert.setTitle("Wallet Decrypted");
-                        alert.setContentText("Wallet successfully decrypted");
+                        alert.setTitle(resources.getString("alert.decryptWallet.successTitle"));
+                        alert.setContentText(resources.getString("alert.decryptWallet.successMsg"));
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING,
-                                "Wallet is already decrypted");
-                        alert.setTitle("Wallet Already Decrypted");
+                                resources.getString("alert.decryptWallet.noticeMsg"));
+                        alert.setTitle(resources.getString("alert.decryptWallet.noticeTitle"));
                         alert.showAndWait();
                     });
                 }, t -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.ERROR,
                                 t.getMessage());
-                        alert.setTitle("Wallet Decryption Failed");
+                        alert.setTitle(resources.getString("alert.decryptWallet.errorTitle"));
                         alert.showAndWait();
                     });
                 }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             } catch (InterruptedException ex) {
                 // TODO: Now what!?
-                logger.error("Interrupted while pushing work to network thread.", ex);
+                logger.error(resources.getString("alert.pushThread.log"), ex);
             }
         });
     }
@@ -316,15 +320,15 @@ public class MainController {
      */
     private void encryptWalletOnUIThread(final Network network) {
         if (network.getObservableEncryptedState().getValue()) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "Cannot encrypt wallet because it is already encrypted.");
-            alert.setTitle("Wallet Is Encrypted");
+            Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("alert.walletEncrypted.msg"));
+            alert.setTitle(resources.getString("alert.walletEncrypted.title"));
             alert.showAndWait();
             return;
         }
 
         Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle("Wallet Password");
-        dialog.setHeaderText("Please enter the wallet password to encrypt the wallet");
+        dialog.setTitle(resources.getString("dialogDecrypt.title"));
+        dialog.setHeaderText(resources.getString("dialogEncrypt.msg"));
 
         PasswordField pass1 = new PasswordField();
         PasswordField pass2 = new PasswordField();
@@ -332,12 +336,12 @@ public class MainController {
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
-        grid.add(new Label("New Password:"), 0, 0);
+        grid.add(new Label(resources.getString("dialogEncrypt.passNew")), 0, 0);
         grid.add(pass1, 1, 0);
-        grid.add(new Label("Repeat Password:"), 0, 1);
+        grid.add(new Label(resources.getString("dialogEncrypt.passRepeat")), 0, 1);
         grid.add(pass2, 1, 1);
 
-        ButtonType buttonTypeOk = new ButtonType("Okay", ButtonBar.ButtonData.OK_DONE);
+        ButtonType buttonTypeOk = new ButtonType(resources.getString("buttonType.Ok"), ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(buttonTypeOk, ButtonType.CANCEL);
 
         dialog.getDialogPane().setContent(grid);
@@ -350,21 +354,21 @@ public class MainController {
                     if (Objects.equals(pass1.getText(), pass2.getText())) {
                         return pass1.getText();
                     } else {
-                        return "False";
+                        return resources.getString("responseType.False");
                     }
                 } else {
-                    return "False";
+                    return resources.getString("responseType.False");
                 }
             }
             return null;
         });
 
         dialog.showAndWait().ifPresent(value -> {
-            if (Objects.equals(value, "False")) {
+            if (Objects.equals(value, resources.getString("responseType.False"))) {
                 Platform.runLater(() -> {
                     Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                            "Passwords did not match");
-                    alert.setTitle("Wallet Encryption Failed");
+                            resources.getString("alert.encryptWallet.mismatchMsg"));
+                    alert.setTitle(resources.getString("alert.encryptWallet.errorTitle"));
                     alert.showAndWait();
                 });
             } else {
@@ -372,28 +376,28 @@ public class MainController {
                     network.encrypt(value, o -> {
                         Platform.runLater(() -> {
                             Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                                    "Wallet successfully encrypted");
-                            alert.setTitle("Wallet Encrypted");
+                                    resources.getString("alert.encryptWallet.successMsg"));
+                            alert.setTitle(resources.getString("alert.encryptWallet.successTitle"));
                             alert.showAndWait();
                         });
                     }, t -> {
                         Platform.runLater(() -> {
                             Alert alert = new Alert(Alert.AlertType.WARNING,
-                                    "Wallet is already encrypted");
-                            alert.setTitle("Wallet Already Encrypted");
+                                    resources.getString("alert.encryptWallet.noticeMsg"));
+                            alert.setTitle(resources.getString("alert.encryptWallet.noticeTitle"));
                             alert.showAndWait();
                         });
                     }, t -> {
                         Platform.runLater(() -> {
                             Alert alert = new Alert(Alert.AlertType.ERROR,
                                     t.getMessage());
-                            alert.setTitle("Wallet Encryption Failed");
+                            alert.setTitle(resources.getString("alert.encryptWallet.errorTitle"));
                             alert.showAndWait();
                         });
                     }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
                 } catch (InterruptedException ex) {
                     // TODO: Now what!?
-                    logger.error("Interrupted while pushing work to network thread.", ex);
+                    logger.error(resources.getString("alert.pushThread.log"), ex);
                 }
             }
         });
@@ -411,9 +415,9 @@ public class MainController {
         try {
             address = Address.fromBase58(network.getParams(), sendAddress.getText());
         } catch (AddressFormatException ex) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "The provided address is invalid: "
+            Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("sendCoins.addressError.msg")
                     + ex.getMessage());
-            alert.setTitle("Address Incorrect");
+            alert.setTitle(resources.getString("sendCoins.addressError.title"));
             alert.showAndWait();
             return;
         }
@@ -421,9 +425,9 @@ public class MainController {
         try {
             amount = Coin.parseCoin(sendAmount.getText());
         } catch (IllegalArgumentException ex) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, "The number of coins to send is invalid: "
+            Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("sendCoins.amountError.msg")
                     + ex.getMessage());
-            alert.setTitle("Amount Incorrect");
+            alert.setTitle(resources.getString("sendCoins.amountError.title"));
             alert.showAndWait();
             return;
         }
@@ -431,12 +435,12 @@ public class MainController {
         final Alert confirmSend = new Alert(Alert.AlertType.CONFIRMATION);
 
         // TODO: Show details of fees and total including fees
-        confirmSend.setTitle("Confirm Sending Coins");
-        confirmSend.setHeaderText("Send "
-                + network.getParams().getMonetaryFormat().format(amount) + " to "
+        confirmSend.setTitle(resources.getString("sendCoins.confirm.title"));
+        confirmSend.setHeaderText(resources.getString("sendCoins.confirm.head1")
+                + network.getParams().getMonetaryFormat().format(amount) + resources.getString("sendCoins.confirm.head2")
                 + address.toBase58() + "?");
-        confirmSend.setContentText("You are about to send "
-                + network.getParams().getMonetaryFormat().format(amount) + " to "
+        confirmSend.setContentText(resources.getString("sendCoins.confirm.msg")
+                + network.getParams().getMonetaryFormat().format(amount) + resources.getString("sendCoins.confirm.head2")
                 + address.toBase58());
         confirmSend.initOwner(((Node) event.getTarget()).getScene().getWindow());
 
@@ -474,28 +478,28 @@ public class MainController {
                     }, (Coin missing) -> {
                         Platform.runLater(() -> {
                             Alert alert = new Alert(Alert.AlertType.WARNING);
-                            alert.setTitle("Insufficient Money");
-                            alert.setHeaderText("You don't have enough money!");
-                            alert.setContentText("You need "
+                            alert.setTitle(resources.getString("doSendCoins.moneyError.title"));
+                            alert.setHeaderText(resources.getString("doSendCoins.moneyError.head"));
+                            alert.setContentText(resources.getString("doSendCoins.moneyError.msg1")
                                     + (missing == null
-                                            ? "an unknown amount"
+                                            ? resources.getString("doSendCoins.moneyError.msg2")
                                             : network.format(missing))
-                                    + " more");
+                                    + resources.getString("doSendCoins.moneyError.msg3"));
 
                             alert.showAndWait();
                         });
                     }, (KeyCrypterException ex) -> {
                         Platform.runLater(() -> {
                             Alert alert = new Alert(Alert.AlertType.WARNING);
-                            alert.setTitle("Wallet Locked");
-                            alert.setHeaderText("Could Not Unlock Wallet");
-                            alert.setContentText("The provided password did not unlock the wallet, please try again");
+                            alert.setTitle(resources.getString("doSendCoins.walletLocked.title"));
+                            alert.setHeaderText(resources.getString("doSendCoins.walletLocked.head"));
+                            alert.setContentText(resources.getString("doSendCoins.walletLocked.msg"));
                             alert.showAndWait();
                         });
                     }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException ex) {
             // TODO: Now what!?
-            logger.error("Interrupted while pushing work to network thread.", ex);
+            logger.error(resources.getString("alert.pushThread.log"), ex);
         }
     }
 
@@ -505,7 +509,7 @@ public class MainController {
         // I don't like that we have to hold the password as a string, so we
         // can't wipe the values once we're done.
         final TextInputDialog passwordDialog = new TextInputDialog("");
-        passwordDialog.setContentText("Please enter the wallet password to unlock it.");
+        passwordDialog.setContentText(resources.getString("getAESKey.msg"));
         final Optional<String> password = passwordDialog.showAndWait();
         if (password.isPresent()) {
             return network.getKeyFromPassword(password.get());
@@ -591,7 +595,7 @@ public class MainController {
     private void showInternalError(Exception ex) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Internal Error");
+            alert.setTitle(resources.getString("internalError.title"));
             alert.setContentText(ex.getMessage());
             alert.showAndWait();
         });
