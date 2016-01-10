@@ -168,11 +168,6 @@ public class Network extends WalletAppKit {
         return params;
     }
 
-    @Override
-    protected void shutDown() throws Exception {
-        super.shutDown();
-    }
-
     /**
      * Format a coin amount.
      */

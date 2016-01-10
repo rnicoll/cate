@@ -269,7 +269,7 @@ public class MainController {
         // For now we do the actual modification on the UI thread to avoid
         // race conditions
         Platform.runLater(() -> {
-            transactions.add(new WalletTransaction(params, tx, newBalance.subtract(prevBalance)));
+            transactions.add(0, new WalletTransaction(params, tx, newBalance.subtract(prevBalance)));
         });
     }
 
