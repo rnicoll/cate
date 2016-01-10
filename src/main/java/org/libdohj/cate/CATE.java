@@ -16,7 +16,6 @@
 package org.libdohj.cate;
 
 import java.io.File;
-import java.util.Locale;
 import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,6 +23,7 @@ import javafx.application.Application;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
 import org.libdohj.cate.controller.MainController;
@@ -46,8 +46,9 @@ public class CATE extends Application {
 
     @Override
     public void start(Stage primaryStage) throws Exception {
-        // This line to resolve keys against Bundle_de_DE.properties
-        //ResourceBundle i18nBundle = ResourceBundle.getBundle("i18n.Bundle", new Locale("de", "DE"));
+        final Image cateIcon = new Image(CATE.class.getResourceAsStream("cate.png"));
+        primaryStage.getIcons().add(cateIcon);
+
         // This line to resolve keys against the environment locale properties
         ResourceBundle i18nBundle = ResourceBundle.getBundle("i18n.Bundle");
 
