@@ -411,16 +411,14 @@ public class MainController {
             return;
         }
 
-        final Alert confirmSend = new Alert(Alert.AlertType.CONFIRMATION);
+        final TransactionConfirmationAlert confirmSend = new TransactionConfirmationAlert(network.getParams());
 
         // TODO: Show details of fees and total including fees
         confirmSend.setTitle(resources.getString("sendCoins.confirm.title"));
-        confirmSend.setHeaderText(resources.getString("sendCoins.confirm.head1")
-                + network.getParams().getMonetaryFormat().format(amount) + resources.getString("sendCoins.confirm.head2")
-                + address.toBase58() + "?");
-        confirmSend.setContentText(resources.getString("sendCoins.confirm.msg")
-                + network.getParams().getMonetaryFormat().format(amount) + resources.getString("sendCoins.confirm.head2")
-                + address.toBase58());
+        confirmSend.setAddressLabel(resources.getString("sendCoins.confirm.address"));
+        confirmSend.setAmountLabel(resources.getString("sendCoins.confirm.amount"));
+        confirmSend.setAddress(address);
+        confirmSend.setAmount(amount);
         confirmSend.initOwner(((Node) event.getTarget()).getScene().getWindow());
 
         confirmSend.showAndWait()

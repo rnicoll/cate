@@ -30,21 +30,21 @@ import javafx.scene.layout.GridPane;
 public class PasswordInputDialog extends Dialog<String> {
     final GridPane grid;
     final PasswordField pass;
-    final Label contentLabel;
+    final Label content;
 
     public PasswordInputDialog() {
         super();
         pass = new PasswordField();
         grid = new GridPane();
-        contentLabel = new Label();
+        content = new Label();
 
         contentTextProperty().addListener((observable, oldVal, newVal) -> {
-            contentLabel.setText(newVal);
+            content.setText(newVal);
         });
 
         grid.setHgap(10);
         grid.setVgap(10);
-        grid.add(contentLabel, 0, 0);
+        grid.add(content, 0, 0);
         grid.add(pass, 1, 0);
 
         getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
