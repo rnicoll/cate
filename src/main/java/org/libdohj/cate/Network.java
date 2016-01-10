@@ -20,8 +20,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -31,8 +30,10 @@ import javafx.beans.value.ObservableValue;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.value.ObservableBooleanValue;
 
+import com.google.common.util.concurrent.Service;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.Context;
 import org.bitcoinj.core.FilteredBlock;
 import org.bitcoinj.core.GetDataMessage;
 import org.bitcoinj.core.InsufficientMoneyException;
@@ -94,43 +95,53 @@ public class Network extends WalletAppKit {
      */
     private final Set<Transaction> seenTransactions = new HashSet<>();
 
-    private ExecutorService networkExecutor;
+    private Executor networkExecutor;
 
     /**
-     * @param params network this manages.
+     * @param context context this network manages.
      * @param controller the controller to push events back to.
      * @param directory the data directory to store the wallet and SPV chain in.
+     * @param networkExecutor executor for tasks belonging to this network.
+     * Must exist after the lifecycle of network (so that service status listeners
+     * can be attached to it).
      */
-    public Network(final NetworkParameters params, final MainController controller,
-            final File directory) {
-        super(params, directory, "cate_" + params.getId());
+    public Network(final Context context, final MainController controller,
+            final File directory, final Executor networkExecutor) {
+        super(context, directory, "cate_" + context.getParams().getId());
         this.controller = controller;
-        this.eventBridge = new EventBridge();
+        this.networkExecutor = networkExecutor;
+        eventBridge = new EventBridge();
         autoStop = false;
         blockingStartup = true;
+        
+        addListener(new Service.Listener() {
+            @Override
+            public void running() {
+                balance.set(wallet().getBalance().toPlainString());
+                try {
+                    blocks.set(store().getChainHead().getHeight());
+                } catch (BlockStoreException ex) {
+                    logger.error("Error getting current chain head while starting wallet "
+                            + params.getId(), ex);
+                }
+                encrypted.set(wallet().isEncrypted());
+                controller.registerWallet(Network.this, wallet());
+            }
+
+            @Override
+            public void failed(Service.State from, Throwable failure) {
+                controller.onNetworkFailed(Network.this, from, failure);
+            }
+        }, networkExecutor);
     }
 
     @Override
     protected void onSetupCompleted() {
-        networkExecutor = Executors.newFixedThreadPool(1, new NetworkThreadFactory(context));
-
         peerGroup().setConnectTimeoutMillis(1000);
         peerGroup().addDataEventListener(eventBridge);
         peerGroup().addConnectionEventListener(eventBridge);
         chain().addNewBestBlockListener(eventBridge);
         wallet().addCoinEventListener(eventBridge);
-
-        networkExecutor.execute((Runnable) () -> {
-            balance.set(Network.this.wallet().getBalance().toPlainString());
-            try {
-                blocks.set(Network.this.store().getChainHead().getHeight());
-            } catch (BlockStoreException ex) {
-                logger.error("Error getting current chain head while starting wallet "
-                        + params.getId(), ex);
-            }
-            encrypted.set(wallet().isEncrypted());
-            controller.registerWallet(Network.this, Network.this.wallet());
-        });
     }
 
     public ObservableValue<String> getObservableBalance() {
@@ -159,9 +170,7 @@ public class Network extends WalletAppKit {
 
     @Override
     protected void shutDown() throws Exception {
-        this.networkExecutor.shutdown();
         super.shutDown();
-        this.networkExecutor.awaitTermination(1, TimeUnit.SECONDS);
     }
 
     /**
@@ -196,7 +205,7 @@ public class Network extends WalletAppKit {
                 final KeyCrypter keyCrypter = wallet().getKeyCrypter();
 
                 if (keyCrypter == null) {
-                    this.controller.handleNetworkError(this, new IllegalStateException("Wallet is encrypted but has no key crypter."));
+                    throw new IllegalStateException("Wallet is encrypted but has no key crypter.");
                 } else {
                     try {
                         wallet().decrypt(keyCrypter.deriveKey(password));

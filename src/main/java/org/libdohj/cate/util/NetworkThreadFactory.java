@@ -1,0 +1,80 @@
+/*
+ * Copyright 2016 Ross Nicoll.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.libdohj.cate.util;
+
+import java.util.concurrent.ThreadFactory;
+import org.bitcoinj.core.Context;
+
+/**
+ * Thread factory for generating threads for a single network. Handles propagating
+ * the bitcoinj Context on to each thread. Also adds an inner class of the main
+ * controller as the uncaught exception handler.
+ *
+ * In comparison to {@link org.bitcoinj.utils.ContextPropagatingThreadFactory this
+ * takes in a context to propagate, rather than inferring it from the current
+ * context.
+ *
+ * @author Ross Nicoll
+ */
+public class NetworkThreadFactory implements ThreadFactory {
+
+    private final Context context;
+    private final ThreadGroup group;
+    private int threadCount = 0;
+    private Thread.UncaughtExceptionHandler uncaughtExceptionHandler;
+
+    /**
+     * @param context context to propagate to all threads created by this factory.
+     */
+    public NetworkThreadFactory(final Context context) {
+        assert context != null;
+        this.context = context;
+        this.group = new ThreadGroup(context.getParams().getId() + " threads");
+        this.uncaughtExceptionHandler = null;
+    }
+
+    @Override
+    public Thread newThread(Runnable r) {
+        final String name = context.getParams().getId() + " worker #"
+                + (++threadCount);
+        final Thread thread = new Thread(group, () -> {
+            Context.propagate(context);
+            r.run();
+        }, name);
+
+        if (uncaughtExceptionHandler != null) {
+            thread.setUncaughtExceptionHandler(uncaughtExceptionHandler);
+        }
+        thread.setDaemon(true);
+
+        return thread;
+    }
+
+    /**
+     * @return the group
+     */
+    public ThreadGroup getGroup() {
+        return group;
+    }
+
+    public Thread.UncaughtExceptionHandler getUncaughtExceptionHandler() {
+        return this.uncaughtExceptionHandler;
+    }
+
+    public void setUncaughtExceptionHandler(Thread.UncaughtExceptionHandler newUncaughtExceptionHandler) {
+        this.uncaughtExceptionHandler = newUncaughtExceptionHandler;
+    }
+}

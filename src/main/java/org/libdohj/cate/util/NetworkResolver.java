@@ -1,4 +1,4 @@
-package org.libdohj.cate;
+package org.libdohj.cate.util;
 
 import java.util.Collection;
 import org.bitcoinj.core.NetworkParameters;

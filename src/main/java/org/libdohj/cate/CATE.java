@@ -15,8 +15,12 @@
  */
 package org.libdohj.cate;
 
+import com.google.common.util.concurrent.Service;
 import java.io.File;
 import java.util.ResourceBundle;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javafx.application.Application;
@@ -28,6 +32,7 @@ import javafx.stage.Stage;
 
 import org.libdohj.cate.controller.MainController;
 import org.libdohj.cate.util.DataDirFactory;
+import org.libdohj.cate.util.NetworkResolver;
 
 /**
  * CATE: Cross-chain Atomic Trading Engine
@@ -43,6 +48,7 @@ public class CATE extends Application {
     private static File dataDir = null;
 
     private MainController controller;
+    private ExecutorService listenerExecutor = Executors.newSingleThreadExecutor();
 
     @Override
     public void start(Stage primaryStage) throws Exception {
@@ -56,9 +62,8 @@ public class CATE extends Application {
         Parent root = loader.load();
 
         this.controller = (MainController) loader.getController();
-
-        this.controller.connectTo("Dogecoin", dataDir);
-        this.controller.connectTo("Dogecoin test", dataDir);
+        this.controller.connectTo(NetworkResolver.getParameter("Dogecoin"), dataDir);
+        this.controller.connectTo(NetworkResolver.getParameter("Dogecoin test"), dataDir);
 
         primaryStage.setTitle(i18nBundle.getString("application.title"));
         primaryStage.setScene(new Scene(root, 800, 500));
@@ -67,7 +72,12 @@ public class CATE extends Application {
 
     @Override
     public void stop() {
-        this.controller.stop();
+        // Wait until all the services stop before we shut down the state change
+        // executor
+        // TODO: We should have the listenerExecutor actually shut itself down
+        // instead of blocking here
+        this.controller.stop().stream().forEach(service -> service.awaitTerminated());
+        listenerExecutor.shutdown();
     }
 
     public static void main(String[] args) {

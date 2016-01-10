@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.libdohj.cate;
+package org.libdohj.cate.util;
 
+import org.libdohj.cate.util.NetworkResolver;
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertFalse;
 import org.bitcoinj.core.NetworkParameters;

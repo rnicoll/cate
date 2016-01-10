@@ -49,20 +49,22 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
-import javafx.scene.control.TextInputDialog;
 import javafx.scene.Node;
 import javafx.scene.layout.GridPane;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
-import org.libdohj.cate.NetworkResolver;
+import org.libdohj.cate.util.NetworkResolver;
 import org.spongycastle.crypto.params.KeyParameter;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
 import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.Context;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
@@ -73,6 +75,7 @@ import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
 
 import org.libdohj.cate.Network;
+import org.libdohj.cate.util.NetworkThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -129,6 +132,7 @@ public class MainController {
     private final ObservableList<Wallet> wallets = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
     private final Map<Wallet, Network> walletNetworks = new HashMap<>();
+    private final Map<Network, ExecutorService> executors = new HashMap<>();
     private KeyCrypterScrypt keyCrypter;
 
     private final Logger logger = LoggerFactory.getLogger(MainController.class);
@@ -162,11 +166,36 @@ public class MainController {
         });
     }
 
-    public void connectTo(String name, File dataDir) {
-        NetworkParameters params = NetworkResolver.getParameter(name); //TODO error handling (nullptr)
-        Network network = new Network(params, this, dataDir);
+    /**
+     * Connect to the specified network.
+     *
+     * @param params network parameters for the relay network to connect to.
+     * @param dataDir directory to store data files in.
+     * @return the service that has been started. Can be used to test start
+     * completes successfully.
+     */
+    public Service connectTo(final NetworkParameters params, final File dataDir) {
+        final Context context = new Context(params);
+        final NetworkThreadFactory threadFactory = new NetworkThreadFactory(context);
+        final ExecutorService executor = Executors.newSingleThreadExecutor(threadFactory);
+        final Network network = new Network(context, this, dataDir, executor);
+        threadFactory.setUncaughtExceptionHandler(buildUncaughtExceptionHandler(network));
         networks.add(network);
-        network.startAsync(); //TODO consider doing this elsewhere too?
+
+        // Add a listener to shut down the executor service once the network service
+        // it's responsible for terminates.
+        network.addListener(new Service.Listener() {
+            @Override
+            public void terminated(Service.State from) {
+                executor.shutdown();
+            }
+        }, executor);
+
+        // Record the executor in case we want to do anything with it later.
+        executors.put(network, executor);
+
+        final Service service = network.startAsync();
+        return service;
     }
 
     private void initializeTransactionList() {
@@ -572,28 +601,46 @@ public class MainController {
                 .collect(Collectors.toList());
     }
 
-    private void showInternalError(Exception ex) {
-        Platform.runLater(() -> {
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle(resources.getString("internalError.title"));
-            alert.setContentText(ex.getMessage());
-            alert.showAndWait();
-        });
+    /**
+     * Builds an uncaught exception handler for threads belonging to a relay
+     * network.
+     *
+     * @param network network the handler is for.
+     * @return an uncaught exception handler.
+     */
+    public Thread.UncaughtExceptionHandler buildUncaughtExceptionHandler(final Network network) {
+        return (Thread thread, Throwable thrwbl) -> {
+            if (thrwbl instanceof Exception) {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle(resources.getString("internalError.title"));
+                    alert.setContentText(thrwbl.getMessage());
+                    alert.showAndWait();
+                    // TODO: Shut down and de-register the wallet from currently
+                    // running
+                });
+            } else {
+                // Fatal, begin shutdown
+                Platform.exit();
+            }
+        };
     }
 
     /**
-     * Handles an error from the network threads.
+     * Handle a network service failing.
      *
-     * @param network network the error occurred within.
-     * @param cause the error to report.
+     * @param network the service which failed.
+     * @param from the status the service was in before it failed.
+     * @param thrwbl the exception causing the service to fail.
      */
-    public void handleNetworkError(Network network, Throwable cause) {
-        if (cause instanceof Exception) {
-            showInternalError((Exception) cause);
-        } else {
-            // Fatal, begin shutdown
-            Platform.exit();
-        }
+    public void onNetworkFailed(Network network, Service.State from, Throwable thrwbl) {
+        networks.remove(network);
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle(resources.getString("internalError.title"));
+            alert.setContentText(thrwbl.getMessage());
+            alert.showAndWait();
+        });
     }
 
     private class WalletToNetworkNameConvertor extends StringConverter<Wallet> {

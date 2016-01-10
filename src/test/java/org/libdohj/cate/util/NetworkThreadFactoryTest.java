@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.libdohj.cate;
+package org.libdohj.cate.util;
 
+import org.libdohj.cate.util.NetworkThreadFactory;
 import org.bitcoinj.core.Context;
 import org.bitcoinj.params.TestNet3Params;
 import org.libdohj.params.DogecoinTestNet3Params;
