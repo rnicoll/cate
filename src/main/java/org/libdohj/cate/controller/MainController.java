@@ -257,33 +257,12 @@ public class MainController {
             return;
         }
 
-        Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle(resources.getString("dialogDecrypt.title"));
-        dialog.setHeaderText(resources.getString("dialogDecrypt.msg"));
+        PasswordInputDialog passwordDialog = new PasswordInputDialog();
+        passwordDialog.setTitle(resources.getString("dialogDecrypt.title"));
+        passwordDialog.setHeaderText(resources.getString("dialogDecrypt.msg"));
+        passwordDialog.setContentText(resources.getString("dialogDecrypt.label"));
 
-        PasswordField pass = new PasswordField();
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.add(new Label(resources.getString("dialogDecrypt.label")), 0, 0);
-        grid.add(pass, 1, 0);
-
-        ButtonType buttonTypeOk = new ButtonType(resources.getString("buttonType.Ok"), ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(buttonTypeOk, ButtonType.CANCEL);
-
-        dialog.getDialogPane().setContent(grid);
-
-        Platform.runLater(pass::requestFocus);
-
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == buttonTypeOk) {
-                return pass.getText();
-            }
-            return null;
-        });
-
-        dialog.showAndWait().ifPresent(value -> {
+        passwordDialog.showAndWait().ifPresent(value -> {
             try {
                 network.decrypt(value, o -> {
                     Platform.runLater(() -> {
@@ -327,7 +306,7 @@ public class MainController {
         }
 
         Dialog<String> dialog = new Dialog<>();
-        dialog.setTitle(resources.getString("dialogDecrypt.title"));
+        dialog.setTitle(resources.getString("dialogEncrypt.title"));
         dialog.setHeaderText(resources.getString("dialogEncrypt.msg"));
 
         PasswordField pass1 = new PasswordField();
@@ -508,8 +487,11 @@ public class MainController {
 
         // I don't like that we have to hold the password as a string, so we
         // can't wipe the values once we're done.
-        final TextInputDialog passwordDialog = new TextInputDialog("");
+        final PasswordInputDialog passwordDialog = new PasswordInputDialog();
         passwordDialog.setContentText(resources.getString("getAESKey.msg"));
+
+        // We don't use lambdas here because we're returning a value based on
+        // the evaluation
         final Optional<String> password = passwordDialog.showAndWait();
         if (password.isPresent()) {
             return network.getKeyFromPassword(password.get());
