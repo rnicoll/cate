@@ -292,33 +292,28 @@ public class MainController {
         passwordDialog.setContentText(resources.getString("dialogDecrypt.label"));
 
         passwordDialog.showAndWait().ifPresent(value -> {
-            try {
-                network.decrypt(value, o -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                        alert.setTitle(resources.getString("alert.decryptWallet.successTitle"));
-                        alert.setContentText(resources.getString("alert.decryptWallet.successMsg"));
-                        alert.showAndWait();
-                    });
-                }, t -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.WARNING,
-                                resources.getString("alert.decryptWallet.noticeMsg"));
-                        alert.setTitle(resources.getString("alert.decryptWallet.noticeTitle"));
-                        alert.showAndWait();
-                    });
-                }, t -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.ERROR,
-                                t.getMessage());
-                        alert.setTitle(resources.getString("alert.decryptWallet.errorTitle"));
-                        alert.showAndWait();
-                    });
-                }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException ex) {
-                // TODO: Now what!?
-                logger.error(resources.getString("alert.pushThread.log"), ex);
-            }
+            network.decrypt(value, o -> {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle(resources.getString("alert.decryptWallet.successTitle"));
+                    alert.setContentText(resources.getString("alert.decryptWallet.successMsg"));
+                    alert.showAndWait();
+                });
+            }, t -> {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.WARNING,
+                            resources.getString("alert.decryptWallet.noticeMsg"));
+                    alert.setTitle(resources.getString("alert.decryptWallet.noticeTitle"));
+                    alert.showAndWait();
+                });
+            }, t -> {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.ERROR,
+                            t.getMessage());
+                    alert.setTitle(resources.getString("alert.decryptWallet.errorTitle"));
+                    alert.showAndWait();
+                });
+            }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
         });
     }
 
@@ -380,33 +375,28 @@ public class MainController {
                     alert.showAndWait();
                 });
             } else {
-                try {
-                    network.encrypt(value, o -> {
-                        Platform.runLater(() -> {
-                            Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                                    resources.getString("alert.encryptWallet.successMsg"));
-                            alert.setTitle(resources.getString("alert.encryptWallet.successTitle"));
-                            alert.showAndWait();
-                        });
-                    }, t -> {
-                        Platform.runLater(() -> {
-                            Alert alert = new Alert(Alert.AlertType.WARNING,
-                                    resources.getString("alert.encryptWallet.noticeMsg"));
-                            alert.setTitle(resources.getString("alert.encryptWallet.noticeTitle"));
-                            alert.showAndWait();
-                        });
-                    }, t -> {
-                        Platform.runLater(() -> {
-                            Alert alert = new Alert(Alert.AlertType.ERROR,
-                                    t.getMessage());
-                            alert.setTitle(resources.getString("alert.encryptWallet.errorTitle"));
-                            alert.showAndWait();
-                        });
-                    }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-                } catch (InterruptedException ex) {
-                    // TODO: Now what!?
-                    logger.error(resources.getString("alert.pushThread.log"), ex);
-                }
+                network.encrypt(value, o -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                                resources.getString("alert.encryptWallet.successMsg"));
+                        alert.setTitle(resources.getString("alert.encryptWallet.successTitle"));
+                        alert.showAndWait();
+                    });
+                }, t -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.WARNING,
+                                resources.getString("alert.encryptWallet.noticeMsg"));
+                        alert.setTitle(resources.getString("alert.encryptWallet.noticeTitle"));
+                        alert.showAndWait();
+                    });
+                }, t -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.ERROR,
+                                t.getMessage());
+                        alert.setTitle(resources.getString("alert.encryptWallet.errorTitle"));
+                        alert.showAndWait();
+                    });
+                }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
             }
         });
     }
@@ -477,36 +467,31 @@ public class MainController {
             }
         }
 
-        try {
-            network.sendCoins(req,
-                    (Wallet.SendResult sendResult) -> {
-                        // TODO: Can we do a "toast" pop up of some kind here?
-                    }, (Coin missing) -> {
-                        Platform.runLater(() -> {
-                            Alert alert = new Alert(Alert.AlertType.WARNING);
-                            alert.setTitle(resources.getString("doSendCoins.moneyError.title"));
-                            alert.setHeaderText(resources.getString("doSendCoins.moneyError.head"));
-                            alert.setContentText(resources.getString("doSendCoins.moneyError.msg1")
-                                    + (missing == null
-                                            ? resources.getString("doSendCoins.moneyError.msg2")
-                                            : network.format(missing))
-                                    + resources.getString("doSendCoins.moneyError.msg3"));
+        network.sendCoins(req,
+                (Wallet.SendResult sendResult) -> {
+                    // TODO: Can we do a "toast" pop up of some kind here?
+                }, (Coin missing) -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.WARNING);
+                        alert.setTitle(resources.getString("doSendCoins.moneyError.title"));
+                        alert.setHeaderText(resources.getString("doSendCoins.moneyError.head"));
+                        alert.setContentText(resources.getString("doSendCoins.moneyError.msg1")
+                                + (missing == null
+                                        ? resources.getString("doSendCoins.moneyError.msg2")
+                                        : network.format(missing))
+                                + resources.getString("doSendCoins.moneyError.msg3"));
 
-                            alert.showAndWait();
-                        });
-                    }, (KeyCrypterException ex) -> {
-                        Platform.runLater(() -> {
-                            Alert alert = new Alert(Alert.AlertType.WARNING);
-                            alert.setTitle(resources.getString("doSendCoins.walletLocked.title"));
-                            alert.setHeaderText(resources.getString("doSendCoins.walletLocked.head"));
-                            alert.setContentText(resources.getString("doSendCoins.walletLocked.msg"));
-                            alert.showAndWait();
-                        });
-                    }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException ex) {
-            // TODO: Now what!?
-            logger.error(resources.getString("alert.pushThread.log"), ex);
-        }
+                        alert.showAndWait();
+                    });
+                }, (KeyCrypterException ex) -> {
+                    Platform.runLater(() -> {
+                        Alert alert = new Alert(Alert.AlertType.WARNING);
+                        alert.setTitle(resources.getString("doSendCoins.walletLocked.title"));
+                        alert.setHeaderText(resources.getString("doSendCoins.walletLocked.head"));
+                        alert.setContentText(resources.getString("doSendCoins.walletLocked.msg"));
+                        alert.showAndWait();
+                    });
+                }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     }
 
     private KeyParameter getAESKeyFromUser(final Network network) {
@@ -536,43 +521,7 @@ public class MainController {
         // We rebuild the transactions on the current thread, rather than slowing
         // down the UI thread, and so keep a temporary copy to be pushed into the
         // main transaction list later.
-        final List<WalletTransaction> tempTransactions = new ArrayList<>();
-
-        // Pre-sort transactions by date
-        final SortedSet<Transaction> rawTransactions = new TreeSet<>(
-                (Transaction a, Transaction b) -> a.getUpdateTime().compareTo(b.getUpdateTime())
-        );
-        rawTransactions.addAll(wallet.getTransactions(false));
-
-        final Map<TransactionOutPoint, Coin> balances = new HashMap<>();
-        // TODO: Should get the value change or information on relevant outputs
-        // or something more useful form Wallet
-        // Meanwhile we do a bunch of duplicate work to recalculate these values,
-        // here
-        for (Transaction tx : rawTransactions) {
-            long valueChange = 0;
-            for (TransactionInput in : tx.getInputs()) {
-                Coin balance = balances.get(in.getOutpoint());
-                // Spend the value on the listed input
-                if (balance != null) {
-                    valueChange -= balance.value;
-                    balances.remove(in.getOutpoint());
-                }
-            }
-            for (TransactionOutput out : tx.getOutputs()) {
-                if (out.isMine(wallet)) {
-                    valueChange += out.getValue().value;
-                    Coin balance = balances.get(out.getOutPointFor());
-                    if (balance == null) {
-                        balance = out.getValue();
-                    } else {
-                        balance.add(out.getValue());
-                    }
-                    balances.put(out.getOutPointFor(), balance);
-                }
-            }
-            tempTransactions.add(new WalletTransaction(wallet.getParams(), tx, Coin.valueOf(valueChange)));
-        }
+        final List<WalletTransaction> tempTransactions = rebuildTransactions(wallet);
 
         Collections.reverse(tempTransactions);
         Platform.runLater(() -> {
@@ -583,6 +532,8 @@ public class MainController {
                 this.sendSelector.setValue(wallet);
             }
 
+            // TODO: Need to enforce order of transactions by time, not by
+            // network and then time as this does
             transactions.addAll(tempTransactions);
         });
 
@@ -641,6 +592,57 @@ public class MainController {
             alert.setContentText(thrwbl.getMessage());
             alert.showAndWait();
         });
+    }
+
+    public void refreshTransactions(Network network, Wallet wallet) {
+        // TODO: Clear transactions from the given wallet out of the list
+        // then re-apply them
+    }
+
+    private List<WalletTransaction> rebuildTransactions(final Wallet wallet) {
+        // We rebuild the transactions on the current thread, rather than slowing
+        // down the UI thread, and so keep a temporary copy to be pushed into the
+        // main transaction list later.
+        final List<WalletTransaction> tempTransactions = new ArrayList<>();
+
+        // Pre-sort transactions by date
+        final SortedSet<Transaction> rawTransactions = new TreeSet<>(
+                (Transaction a, Transaction b) -> a.getUpdateTime().compareTo(b.getUpdateTime())
+        );
+        rawTransactions.addAll(wallet.getTransactions(false));
+
+        final Map<TransactionOutPoint, Coin> balances = new HashMap<>();
+        // TODO: Should get the value change or information on relevant outputs
+        // or something more useful form Wallet
+        // Meanwhile we do a bunch of duplicate work to recalculate these values,
+        // here
+        for (Transaction tx : rawTransactions) {
+            long valueChange = 0;
+            for (TransactionInput in : tx.getInputs()) {
+                Coin balance = balances.get(in.getOutpoint());
+                // Spend the value on the listed input
+                if (balance != null) {
+                    valueChange -= balance.value;
+                    balances.remove(in.getOutpoint());
+                }
+            }
+            for (TransactionOutput out : tx.getOutputs()) {
+                if (out.isMine(wallet)) {
+                    valueChange += out.getValue().value;
+                    Coin balance = balances.get(out.getOutPointFor());
+                    if (balance == null) {
+                        balance = out.getValue();
+                    } else {
+                        balance.add(out.getValue());
+                    }
+                    balances.put(out.getOutPointFor(), balance);
+                }
+            }
+            tempTransactions.add(new WalletTransaction(wallet.getParams(), tx, Coin.valueOf(valueChange)));
+        }
+
+        Collections.reverse(tempTransactions);
+        return tempTransactions;
     }
 
     private class WalletToNetworkNameConvertor extends StringConverter<Wallet> {

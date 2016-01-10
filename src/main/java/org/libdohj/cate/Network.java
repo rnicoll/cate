@@ -34,6 +34,7 @@ import com.google.common.util.concurrent.Service;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.Context;
+import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.FilteredBlock;
 import org.bitcoinj.core.GetDataMessage;
 import org.bitcoinj.core.InsufficientMoneyException;
@@ -49,11 +50,12 @@ import org.bitcoinj.core.Wallet.SendResult;
 import org.bitcoinj.core.listeners.NewBestBlockListener;
 import org.bitcoinj.core.listeners.PeerConnectionEventListener;
 import org.bitcoinj.core.listeners.PeerDataEventListener;
-import org.bitcoinj.core.listeners.WalletCoinEventListener;
+import org.bitcoinj.core.listeners.WalletEventListener;
 import org.bitcoinj.crypto.KeyCrypter;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.kits.WalletAppKit;
+import org.bitcoinj.script.Script;
 import org.bitcoinj.store.BlockStoreException;
 import org.libdohj.cate.controller.MainController;
 import org.slf4j.Logger;
@@ -95,7 +97,7 @@ public class Network extends WalletAppKit {
      */
     private final Set<Transaction> seenTransactions = new HashSet<>();
 
-    private Executor networkExecutor;
+    private final Executor networkExecutor;
 
     /**
      * @param context context this network manages.
@@ -190,8 +192,7 @@ public class Network extends WalletAppKit {
     public void decrypt(String password, Consumer<Object> onSuccess,
             Consumer<Object> onWalletNotEncrypted,
             Consumer<KeyCrypterException> onCrypterError,
-            final long timeout, final TimeUnit timeUnit)
-            throws InterruptedException {
+            final long timeout, final TimeUnit timeUnit) {
         this.networkExecutor.execute((Runnable) () -> {
             final Wallet wallet = wallet();
             if (!wallet.isEncrypted()) {
@@ -229,8 +230,7 @@ public class Network extends WalletAppKit {
     public void encrypt(final String password, final Consumer<Object> onSuccess,
             Consumer<Object> onWalletEncrypted,
             Consumer<KeyCrypterException> onCrypterError,
-            final long timeout, final TimeUnit timeUnit)
-            throws InterruptedException {
+            final long timeout, final TimeUnit timeUnit) {
         this.networkExecutor.execute((Runnable) () -> {
             final Wallet wallet = wallet();
             if (wallet.isEncrypted()) {
@@ -262,6 +262,8 @@ public class Network extends WalletAppKit {
      * @param onSuccess handler to be called on success
      * @param onInsufficientFunds handler to be called if the user lacks
      * sufficient funds
+     * @param onWalletLocked handler to be called if the wallet is locked and
+     * no suitable key is provided in the send request
      * @param timeout timeout on queueing the work request
      * @param timeUnit time unit for the timeout
      */
@@ -269,8 +271,7 @@ public class Network extends WalletAppKit {
             final Consumer<SendResult> onSuccess,
             final Consumer<Coin> onInsufficientFunds,
             final Consumer<KeyCrypterException> onWalletLocked,
-            final long timeout, final TimeUnit timeUnit)
-            throws InterruptedException {
+            final long timeout, final TimeUnit timeUnit) {
         this.networkExecutor.execute((Runnable) () -> {
             // TODO: Calculate fees in a network-appropriate way
             final SendResult result;
@@ -308,7 +309,7 @@ public class Network extends WalletAppKit {
         }
     }
 
-    public class EventBridge implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletCoinEventListener {
+    public class EventBridge implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletEventListener {
 
         private EventBridge() {
 
@@ -368,6 +369,33 @@ public class Network extends WalletAppKit {
             }
             balance.set(newBalance.toPlainString());
             // TODO: Update the displayed receive address
+        }
+
+        @Override
+        public void onReorganize(Wallet wallet) {
+            balance.set(wallet.getBalance().toPlainString());
+            controller.refreshTransactions(Network.this, wallet);
+        }
+
+        @Override
+        public void onTransactionConfidenceChanged(Wallet wallet, Transaction tx) {
+            balance.set(wallet.getBalance().toPlainString());
+        }
+
+        @Override
+        public void onWalletChanged(Wallet wallet) {
+            balance.set(wallet.getBalance().toPlainString());
+            controller.refreshTransactions(Network.this, wallet);
+        }
+
+        @Override
+        public void onScriptsChanged(Wallet wallet, List<Script> scripts, boolean isAddingScripts) {
+            // Don't care
+        }
+
+        @Override
+        public void onKeysAdded(List<ECKey> keys) {
+            // Don't care
         }
     }
 }
