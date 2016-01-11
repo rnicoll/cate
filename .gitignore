@@ -56,3 +56,7 @@ target/
 # Blockchain/wallet
 *.spvchain
 *.wallet
+
+# IntelliJ IDEA
+.idea/
+*.iml

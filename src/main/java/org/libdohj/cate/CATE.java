@@ -30,6 +30,7 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
+import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.controller.MainController;
 import org.libdohj.cate.util.DataDirFactory;
 import org.libdohj.cate.util.NetworkResolver;
@@ -65,8 +66,11 @@ public class CATE extends Application {
         this.controller.connectTo(NetworkResolver.getParameter("Dogecoin"), dataDir);
         this.controller.connectTo(NetworkResolver.getParameter("Dogecoin test"), dataDir);
 
+        NotificationPane notificationPane = new NotificationPane(root);
+        this.controller.setNotificationPane(notificationPane);
+
         primaryStage.setTitle(i18nBundle.getString("application.title"));
-        primaryStage.setScene(new Scene(root, 800, 500));
+        primaryStage.setScene(new Scene(notificationPane, 800, 500));
         primaryStage.show();
     }
 
