@@ -359,7 +359,7 @@ public class Network extends WalletAppKit {
             if (seenTransactions.add(tx)) {
                 controller.addTransaction(params, tx, prevBalance, newBalance);
             }
-            balance.set(newBalance.toPlainString());
+            balance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString());
         }
 
         @Override
@@ -367,7 +367,7 @@ public class Network extends WalletAppKit {
             if (seenTransactions.add(tx)) {
                 controller.addTransaction(params, tx, prevBalance, newBalance);
             }
-            balance.set(newBalance.toPlainString());
+            balance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString());
             // TODO: Update the displayed receive address
         }
 

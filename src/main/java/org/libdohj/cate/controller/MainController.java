@@ -484,6 +484,10 @@ public class MainController {
                         alert.showAndWait();
                     });
                 }, (KeyCrypterException ex) -> {
+                    // TODO: This needs to be a bit more useful in explaining
+                    // what's going on where the user has unconfirmed transactions
+                    // sufficient to cover a payment, but cannot spend them until
+                    // they have confirmed.
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING);
                         alert.setTitle(resources.getString("doSendCoins.walletLocked.title"));
