@@ -33,6 +33,7 @@ import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
@@ -58,6 +59,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
+import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.util.NetworkResolver;
 import org.spongycastle.crypto.params.KeyParameter;
 
@@ -127,6 +129,8 @@ public class MainController {
     private TableColumn<Network, Number> networkBlocks;
     @FXML
     private TableColumn<Network, Number> networkPeers;
+
+    private NotificationPane notificationPane;
 
     private final ObservableList<Network> networks = FXCollections.observableArrayList();
     private final ObservableList<Wallet> wallets = FXCollections.observableArrayList();
@@ -253,6 +257,10 @@ public class MainController {
             final Network network = dataFeatures.getValue();
             return network.getObservableBlocks();
         });
+    }
+
+    public void setNotificationPane(NotificationPane notificationPane) {
+        this.notificationPane = notificationPane;
     }
 
     /**
@@ -469,7 +477,7 @@ public class MainController {
 
         network.sendCoins(req,
                 (Wallet.SendResult sendResult) -> {
-                    // TODO: Can we do a "toast" pop up of some kind here?
+                    showTopBanner(resources.getString("doSendCoin.successNotification"));
                 }, (Coin missing) -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING);
@@ -496,6 +504,27 @@ public class MainController {
                         alert.showAndWait();
                     });
                 }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Show a top banner with a 3 second timeout and the specified text
+     * @param text Text to show in the banner.
+     */
+    private void showTopBanner(String text) {
+        notificationPane.setText(text);
+        notificationPane.getStyleClass().add(NotificationPane.STYLE_CLASS_DARK);
+        notificationPane.show();
+        Task<Void> hideTask = new Task<Void>() {
+            @Override
+            protected Void call() throws Exception {
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException ignored) {}
+                return null;
+            }
+        };
+        hideTask.setOnSucceeded(event -> notificationPane.hide());
+        new Thread(hideTask).start();
     }
 
     private KeyParameter getAESKeyFromUser(final Network network) {
