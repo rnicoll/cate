@@ -98,7 +98,7 @@ public class MainController {
     private MenuItem menuExit;
 
     @FXML
-    private ComboBox<Wallet> receiveSelector;
+    private ComboBox<Network> receiveSelector;
     @FXML
     private TextField myAddress;
     @FXML
@@ -116,7 +116,7 @@ public class MainController {
     @FXML
     private TextField sendAmount;
     @FXML
-    private ComboBox<Wallet> sendSelector;
+    private ComboBox<Network> sendSelector;
     @FXML
     private Button sendButton;
     @FXML
@@ -132,8 +132,10 @@ public class MainController {
 
     private NotificationPane notificationPane;
 
+    /** All networks this controller is aware of */
     private final ObservableList<Network> networks = FXCollections.observableArrayList();
-    private final ObservableList<Wallet> wallets = FXCollections.observableArrayList();
+    /** All networks which are in a running state */
+    private final ObservableList<Network> activeNetworks = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
     private final Map<Wallet, Network> walletNetworks = new HashMap<>();
     private final Map<Network, ExecutorService> executors = new HashMap<>();
@@ -143,17 +145,19 @@ public class MainController {
 
     @FXML
     public void initialize() {
-        receiveSelector.setItems(wallets);
-        sendSelector.setItems(wallets);
+        receiveSelector.setItems(activeNetworks);
+        sendSelector.setItems(activeNetworks);
         receiveSelector.setConverter(new WalletToNetworkNameConvertor());
         sendSelector.setConverter(receiveSelector.getConverter());
 
         initializeWalletList();
         initializeTransactionList();
 
+        receiveSelector.setDisable(true);
+        sendSelector.setDisable(true);
         receiveSelector.setOnAction((ActionEvent event) -> {
             if (event.getTarget().equals(receiveSelector)) {
-                final Wallet wallet = (Wallet) receiveSelector.getValue();
+                final Wallet wallet = ((Network) receiveSelector.getValue()).wallet();
                 final Address address = wallet.currentReceiveAddress();
                 Platform.runLater(() -> {
                     myAddress.setText(address.toBase58());
@@ -192,6 +196,7 @@ public class MainController {
             @Override
             public void terminated(Service.State from) {
                 executor.shutdown();
+                activeNetworks.remove(network);
             }
         }, executor);
 
@@ -247,15 +252,15 @@ public class MainController {
         });
         networkBalance.setCellValueFactory(dataFeatures -> {
             final Network network = dataFeatures.getValue();
-            return network.getObservableBalance();
+            return network.getEstimatedBalanceProperty();
         });
         networkPeers.setCellValueFactory(dataFeatures -> {
             final Network network = dataFeatures.getValue();
-            return network.getObservablePeerCount();
+            return network.getPeerCountProperty();
         });
         networkBlocks.setCellValueFactory(dataFeatures -> {
             final Network network = dataFeatures.getValue();
-            return network.getObservableBlocks();
+            return network.getBlocksProperty();
         });
     }
 
@@ -266,18 +271,18 @@ public class MainController {
     /**
      * Add a transaction to those displayed by this controller.
      *
-     * @param params network parameters for the network the transaction is from.
+     * @param network network the transaction is from.
      * @param tx the underlying transaction to add.
      * @param prevBalance previous wallet balance.
      * @param newBalance new wallet balance.
      */
-    public void addTransaction(NetworkParameters params, Transaction tx, Coin prevBalance, Coin newBalance) {
+    public void addTransaction(Network network, Transaction tx, Coin prevBalance, Coin newBalance) {
         // TODO: Transaction lists should be aggregated from listed held by each
         // network.
         // For now we do the actual modification on the UI thread to avoid
         // race conditions
         Platform.runLater(() -> {
-            transactions.add(0, new WalletTransaction(params, tx, newBalance.subtract(prevBalance)));
+            transactions.add(0, new WalletTransaction(network, tx, newBalance.subtract(prevBalance)));
         });
     }
 
@@ -287,7 +292,7 @@ public class MainController {
      * encrypted.
      */
     private void decryptWalletOnUIThread(final Network network) {
-        if (!network.getObservableEncryptedState().getValue()) {
+        if (!network.getEncryptedStateProperty().getValue()) {
             Alert alert = new Alert(Alert.AlertType.ERROR,resources.getString("alert.walletUnencrypted.msg"));
             alert.setTitle(resources.getString("alert.walletUnencrypted.title"));
             alert.showAndWait();
@@ -330,7 +335,7 @@ public class MainController {
      * wallet. If the wallet is already encrypted it changes the encryption key.
      */
     private void encryptWalletOnUIThread(final Network network) {
-        if (network.getObservableEncryptedState().getValue()) {
+        if (network.getEncryptedStateProperty().getValue()) {
             Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("alert.walletEncrypted.msg"));
             alert.setTitle(resources.getString("alert.walletEncrypted.title"));
             alert.showAndWait();
@@ -467,7 +472,7 @@ public class MainController {
         // TODO: Should have an unlock() method we call here,
         // and uses cached password for ~5 minutes, rather than prompting every
         // time
-        if (network.getObservableEncryptedState().getValue()) {
+        if (network.getEncryptedStateProperty().getValue()) {
             req.aesKey = getAESKeyFromUser(network);
             if (req.aesKey == null) {
                 // No key available, which means the user hit cancel
@@ -554,15 +559,17 @@ public class MainController {
         // We rebuild the transactions on the current thread, rather than slowing
         // down the UI thread, and so keep a temporary copy to be pushed into the
         // main transaction list later.
-        final List<WalletTransaction> tempTransactions = rebuildTransactions(wallet);
+        final List<WalletTransaction> tempTransactions = rebuildTransactions(network, wallet);
 
         Collections.reverse(tempTransactions);
         Platform.runLater(() -> {
-            this.wallets.add(wallet);
-            if (this.wallets.size() == 1) {
+            this.activeNetworks.add(network);
+            if (this.activeNetworks.size() == 1) {
                 // We've just added the first wallet, choose it
-                this.receiveSelector.setValue(wallet);
-                this.sendSelector.setValue(wallet);
+                receiveSelector.setValue(network);
+                sendSelector.setValue(network);
+                receiveSelector.setDisable(false);
+                sendSelector.setDisable(false);
             }
 
             // TODO: Need to enforce order of transactions by time, not by
@@ -632,7 +639,7 @@ public class MainController {
         // then re-apply them
     }
 
-    private List<WalletTransaction> rebuildTransactions(final Wallet wallet) {
+    private List<WalletTransaction> rebuildTransactions(final Network network, final Wallet wallet) {
         // We rebuild the transactions on the current thread, rather than slowing
         // down the UI thread, and so keep a temporary copy to be pushed into the
         // main transaction list later.
@@ -671,29 +678,29 @@ public class MainController {
                     balances.put(out.getOutPointFor(), balance);
                 }
             }
-            tempTransactions.add(new WalletTransaction(wallet.getParams(), tx, Coin.valueOf(valueChange)));
+            tempTransactions.add(new WalletTransaction(network, tx, Coin.valueOf(valueChange)));
         }
 
         Collections.reverse(tempTransactions);
         return tempTransactions;
     }
 
-    private class WalletToNetworkNameConvertor extends StringConverter<Wallet> {
+    private class WalletToNetworkNameConvertor extends StringConverter<Network> {
 
         public WalletToNetworkNameConvertor() {
         }
 
         @Override
-        public String toString(Wallet wallet) {
-            return NetworkResolver.getName(wallet.getParams());
+        public String toString(Network network) {
+            return NetworkResolver.getName(network.getParams());
         }
 
         @Override
-        public Wallet fromString(String string) {
+        public Network fromString(String string) {
             final NetworkParameters params = NetworkResolver.getParameter(string);
-            for (Wallet wallet : wallets) {
-                if (wallet.getParams().equals(params)) {
-                    return wallet;
+            for (Network network: networks) {
+                if (network.getParams().equals(params)) {
+                    return network;
                 }
             }
             return null;
@@ -702,22 +709,29 @@ public class MainController {
 
     public static class WalletTransaction extends Object {
 
-        private final NetworkParameters params;
+        private final Network network;
         private final Transaction transaction;
         private final Coin balanceChange;
 
-        private WalletTransaction(final NetworkParameters params,
+        private WalletTransaction(final Network network,
                 final Transaction transaction, final Coin balanceChange) {
-            this.params = params;
+            this.network = network;
             this.transaction = transaction;
             this.balanceChange = balanceChange;
+        }
+
+        /**
+         * @return the network
+         */
+        public Network getNetwork() {
+            return network;
         }
 
         /**
          * @return the network params
          */
         public NetworkParameters getParams() {
-            return params;
+            return network.getParams();
         }
 
         /**

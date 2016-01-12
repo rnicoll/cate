@@ -25,12 +25,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleObjectProperty;
-import javafx.beans.value.ObservableValue;
 import javafx.beans.property.SimpleBooleanProperty;
-import javafx.beans.value.ObservableBooleanValue;
 
 import com.google.common.util.concurrent.Service;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.Context;
@@ -80,7 +81,7 @@ public class Network extends WalletAppKit {
     private final MainController controller;
     private final Logger logger = LoggerFactory.getLogger(Network.class);
 
-    private final SimpleObjectProperty<String> balance = new SimpleObjectProperty<>("0");
+    private final SimpleStringProperty estimatedBalance = new SimpleStringProperty("0");
     private final SimpleIntegerProperty blocks = new SimpleIntegerProperty(0);
     private final SimpleIntegerProperty blocksLeft = new SimpleIntegerProperty(0);
     /**
@@ -119,7 +120,7 @@ public class Network extends WalletAppKit {
         addListener(new Service.Listener() {
             @Override
             public void running() {
-                balance.set(wallet().getBalance().toPlainString());
+                estimatedBalance.set(wallet().getBalance().toPlainString());
                 try {
                     blocks.set(store().getChainHead().getHeight());
                 } catch (BlockStoreException ex) {
@@ -146,23 +147,23 @@ public class Network extends WalletAppKit {
         wallet().addCoinEventListener(eventBridge);
     }
 
-    public ObservableValue<String> getObservableBalance() {
-        return balance;
+    public StringProperty getEstimatedBalanceProperty() {
+        return estimatedBalance;
     }
 
-    public ObservableValue<Number> getObservableBlocks() {
+    public IntegerProperty getBlocksProperty() {
         return blocks;
     }
 
-    public ObservableValue<Number> getObservableBlocksLeft() {
+    public IntegerProperty getBlocksLeftProperty() {
         return blocksLeft;
     }
 
-    public ObservableBooleanValue getObservableEncryptedState() {
+    public BooleanProperty getEncryptedStateProperty() {
         return encrypted;
     }
 
-    public ObservableValue<Number> getObservablePeerCount() {
+    public IntegerProperty getPeerCountProperty() {
         return peerCount;
     }
 
@@ -357,34 +358,34 @@ public class Network extends WalletAppKit {
         @Override
         public void onCoinsReceived(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
             if (seenTransactions.add(tx)) {
-                controller.addTransaction(params, tx, prevBalance, newBalance);
+                controller.addTransaction(Network.this, tx, prevBalance, newBalance);
             }
-            balance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString());
+            estimatedBalance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString());
         }
 
         @Override
         public void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
             if (seenTransactions.add(tx)) {
-                controller.addTransaction(params, tx, prevBalance, newBalance);
+                controller.addTransaction(Network.this, tx, prevBalance, newBalance);
             }
-            balance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString());
+            estimatedBalance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString());
             // TODO: Update the displayed receive address
         }
 
         @Override
         public void onReorganize(Wallet wallet) {
-            balance.set(wallet.getBalance().toPlainString());
+            estimatedBalance.set(wallet.getBalance().toPlainString());
             controller.refreshTransactions(Network.this, wallet);
         }
 
         @Override
         public void onTransactionConfidenceChanged(Wallet wallet, Transaction tx) {
-            balance.set(wallet.getBalance().toPlainString());
+            estimatedBalance.set(wallet.getBalance().toPlainString());
         }
 
         @Override
         public void onWalletChanged(Wallet wallet) {
-            balance.set(wallet.getBalance().toPlainString());
+            estimatedBalance.set(wallet.getBalance().toPlainString());
             controller.refreshTransactions(Network.this, wallet);
         }
 
