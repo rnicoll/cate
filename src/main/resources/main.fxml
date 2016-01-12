@@ -50,7 +50,7 @@
                     <TableColumn fx:id="txNetworkColumn" text="%txlist.txNetworkColumn.thead" prefWidth="100" />
                     <TableColumn fx:id="txDateColumn" text="%txlist.txDateColumn.thead" prefWidth="100" />
                     <TableColumn fx:id="txAmountColumn" text="%txlist.txAmountColumn.thead" prefWidth="100" />
-                    <TableColumn fx:id="txLabelColumn" text="%txlist.txLabelColumn.thead" prefWidth="200" />
+                    <TableColumn fx:id="txMemoColumn" text="%txlist.txMemoColumn.thead" prefWidth="200" />
                 </columns>
             </TableView>
 

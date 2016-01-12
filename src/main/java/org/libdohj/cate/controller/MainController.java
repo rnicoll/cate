@@ -110,7 +110,7 @@ public class MainController {
     @FXML
     private TableColumn<WalletTransaction, String> txAmountColumn;
     @FXML
-    private TableColumn<WalletTransaction, String> txLabelColumn;
+    private TableColumn<WalletTransaction, String> txMemoColumn;
     @FXML
     private TextField sendAddress;
     @FXML
@@ -145,6 +145,7 @@ public class MainController {
 
     @FXML
     public void initialize() {
+        
         receiveSelector.setItems(activeNetworks);
         sendSelector.setItems(activeNetworks);
         receiveSelector.setConverter(new WalletToNetworkNameConvertor());
@@ -222,6 +223,10 @@ public class MainController {
         txAmountColumn.setCellValueFactory(dataFeatures -> {
             final WalletTransaction transaction = dataFeatures.getValue();
             return new SimpleStringProperty(transaction.getBalanceChange().toPlainString());
+        });
+        txMemoColumn.setCellValueFactory(dataFeatures -> {
+            final WalletTransaction transaction = dataFeatures.getValue();
+            return new SimpleStringProperty(transaction.getTransaction().getMemo());
         });
     }
 
