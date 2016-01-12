@@ -120,7 +120,7 @@ public class Network extends WalletAppKit {
         addListener(new Service.Listener() {
             @Override
             public void running() {
-                estimatedBalance.set(wallet().getBalance().toPlainString());
+                estimatedBalance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toPlainString());
                 try {
                     blocks.set(store().getChainHead().getHeight());
                 } catch (BlockStoreException ex) {
@@ -374,18 +374,18 @@ public class Network extends WalletAppKit {
 
         @Override
         public void onReorganize(Wallet wallet) {
-            estimatedBalance.set(wallet.getBalance().toPlainString());
+            estimatedBalance.set(wallet.getBalance(Wallet.BalanceType.ESTIMATED).toPlainString());
             controller.refreshTransactions(Network.this, wallet);
         }
 
         @Override
         public void onTransactionConfidenceChanged(Wallet wallet, Transaction tx) {
-            estimatedBalance.set(wallet.getBalance().toPlainString());
+            estimatedBalance.set(wallet.getBalance(Wallet.BalanceType.ESTIMATED).toPlainString());
         }
 
         @Override
         public void onWalletChanged(Wallet wallet) {
-            estimatedBalance.set(wallet.getBalance().toPlainString());
+            estimatedBalance.set(wallet.getBalance(Wallet.BalanceType.ESTIMATED).toPlainString());
             controller.refreshTransactions(Network.this, wallet);
         }
 

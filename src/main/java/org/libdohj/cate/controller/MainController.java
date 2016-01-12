@@ -58,6 +58,7 @@ import com.google.common.util.concurrent.Service;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import javafx.beans.property.StringProperty;
 
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.util.NetworkResolver;
@@ -126,9 +127,7 @@ public class MainController {
     @FXML
     private TableColumn<Network, String> networkBalance;
     @FXML
-    private TableColumn<Network, Number> networkBlocks;
-    @FXML
-    private TableColumn<Network, Number> networkPeers;
+    private TableColumn<Network, String> networkStatus;
 
     private NotificationPane notificationPane;
 
@@ -137,8 +136,8 @@ public class MainController {
     /** All networks which are in a running state */
     private final ObservableList<Network> activeNetworks = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
-    private final Map<Wallet, Network> walletNetworks = new HashMap<>();
     private final Map<Network, ExecutorService> executors = new HashMap<>();
+    private final Map<Network, StringProperty> networkStatuses = new HashMap<>();
     private KeyCrypterScrypt keyCrypter;
 
     private final Logger logger = LoggerFactory.getLogger(MainController.class);
@@ -158,11 +157,16 @@ public class MainController {
         sendSelector.setDisable(true);
         receiveSelector.setOnAction((ActionEvent event) -> {
             if (event.getTarget().equals(receiveSelector)) {
-                final Wallet wallet = ((Network) receiveSelector.getValue()).wallet();
-                final Address address = wallet.currentReceiveAddress();
-                Platform.runLater(() -> {
-                    myAddress.setText(address.toBase58());
-                });
+                final Network network = receiveSelector.getValue();
+                if (network != null) {
+                    final Wallet wallet = network.wallet();
+                    final Address address = wallet.currentReceiveAddress();
+                    Platform.runLater(() -> {
+                        myAddress.setText(address.toBase58());
+                    });
+                } else {
+                    myAddress.setText("");
+                }
             }
         });
 
@@ -188,6 +192,8 @@ public class MainController {
         final NetworkThreadFactory threadFactory = new NetworkThreadFactory(context);
         final ExecutorService executor = Executors.newSingleThreadExecutor(threadFactory);
         final Network network = new Network(context, this, dataDir, executor);
+        final StringProperty statusProperty = new SimpleStringProperty("Starting");
+
         threadFactory.setUncaughtExceptionHandler(buildUncaughtExceptionHandler(network));
         networks.add(network);
 
@@ -195,14 +201,38 @@ public class MainController {
         // it's responsible for terminates.
         network.addListener(new Service.Listener() {
             @Override
+            public void starting() {
+                statusProperty.setValue(resources.getString("walletList.networkStatus.starting"));
+            }
+
+            @Override
+            public void running() {
+                // TODO: Should reflect syncing/synced
+                statusProperty.setValue(resources.getString("walletList.networkStatus.running"));
+            }
+
+            @Override
+            public void stopping(Service.State from) {
+                statusProperty.setValue(resources.getString("walletList.networkStatus.stopping"));
+            }
+
+            @Override
             public void terminated(Service.State from) {
                 executor.shutdown();
-                activeNetworks.remove(network);
+                Platform.runLater(() -> { activeNetworks.remove(network); });
+                statusProperty.setValue(resources.getString("walletList.networkStatus.terminated"));
+            }
+
+            @Override
+            public void failed(Service.State from, Throwable failure) {
+                statusProperty.setValue(resources.getString("walletList.networkStatus.failed"));
             }
         }, executor);
 
         // Record the executor in case we want to do anything with it later.
         executors.put(network, executor);
+
+        networkStatuses.put(network, statusProperty);
 
         final Service service = network.startAsync();
         return service;
@@ -259,13 +289,9 @@ public class MainController {
             final Network network = dataFeatures.getValue();
             return network.getEstimatedBalanceProperty();
         });
-        networkPeers.setCellValueFactory(dataFeatures -> {
+        networkStatus.setCellValueFactory(dataFeatures -> {
             final Network network = dataFeatures.getValue();
-            return network.getPeerCountProperty();
-        });
-        networkBlocks.setCellValueFactory(dataFeatures -> {
-            final Network network = dataFeatures.getValue();
-            return network.getBlocksProperty();
+            return getStatusProperty(network);
         });
     }
 
@@ -426,7 +452,7 @@ public class MainController {
     private void sendCoinsOnUIThread(ActionEvent event) {
         final Address address;
         final Coin amount;
-        final Network network = walletNetworks.get(sendSelector.getValue());
+        final Network network = (Network) sendSelector.getValue();
 
         try {
             address = Address.fromBase58(network.getParams(), sendAddress.getText());
@@ -521,9 +547,11 @@ public class MainController {
      * @param text Text to show in the banner.
      */
     private void showTopBanner(String text) {
-        notificationPane.setText(text);
-        notificationPane.getStyleClass().add(NotificationPane.STYLE_CLASS_DARK);
-        notificationPane.show();
+        Platform.runLater(() -> {
+            notificationPane.setText(text);
+            notificationPane.getStyleClass().add(NotificationPane.STYLE_CLASS_DARK);
+            notificationPane.show();
+        });
         Task<Void> hideTask = new Task<Void>() {
             @Override
             protected Void call() throws Exception {
@@ -533,7 +561,11 @@ public class MainController {
                 return null;
             }
         };
-        hideTask.setOnSucceeded(event -> notificationPane.hide());
+        hideTask.setOnSucceeded(event -> {
+            Platform.runLater(() -> {
+                notificationPane.hide();
+            });
+        });
         new Thread(hideTask).start();
     }
 
@@ -581,8 +613,6 @@ public class MainController {
             // network and then time as this does
             transactions.addAll(tempTransactions);
         });
-
-        walletNetworks.put(wallet, network);
     }
 
     /**
@@ -606,6 +636,8 @@ public class MainController {
      */
     public Thread.UncaughtExceptionHandler buildUncaughtExceptionHandler(final Network network) {
         return (Thread thread, Throwable thrwbl) -> {
+            logger.error("Internal error from network "
+                + network.getParams().getId(), thrwbl);
             if (thrwbl instanceof Exception) {
                 Platform.runLater(() -> {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -688,6 +720,10 @@ public class MainController {
 
         Collections.reverse(tempTransactions);
         return tempTransactions;
+    }
+
+    private StringProperty getStatusProperty(Network network) {
+        return networkStatuses.get(network);
     }
 
     private class WalletToNetworkNameConvertor extends StringConverter<Network> {

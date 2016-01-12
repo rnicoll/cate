@@ -68,17 +68,16 @@
     </center>
 
     <right>
-        <VBox BorderPane.alignment="TOP_CENTER" prefWidth="285" >
+        <VBox BorderPane.alignment="TOP_CENTER" prefWidth="250" >
             <BorderPane.margin>
                 <Insets bottom="10.0" left="5.0" right="10.0" top="10.0"/>
             </BorderPane.margin>
             <Label text="%walletList.label" VBox.vgrow="NEVER" />
             <TableView fx:id="walletList" VBox.vgrow="ALWAYS">
                 <columns>
-                    <TableColumn fx:id="networkName" text="%walletList.networkName.thead" prefWidth="100" />
-                    <TableColumn fx:id="networkBalance" text="%walletList.networkBalance.thead" prefWidth="60" resizable="true" />
-                    <TableColumn fx:id="networkBlocks" text="%walletList.networkBlocks.thead" prefWidth="60" />
-                    <TableColumn fx:id="networkPeers" text="%walletList.networkPeers.thead" prefWidth="60" />
+                    <TableColumn fx:id="networkName" text="%walletList.networkName.thead" prefWidth="95" />
+                    <TableColumn fx:id="networkBalance" text="%walletList.networkBalance.thead" prefWidth="93" resizable="true" />
+                    <TableColumn fx:id="networkStatus" text="%walletList.networkStatus.thead" prefWidth="70" />
                 </columns>
             </TableView>
         </VBox>
