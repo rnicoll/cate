@@ -1,6 +1,5 @@
 package org.libdohj.cate.util;
 
-import java.util.Collection;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.TestNet3Params;
@@ -19,19 +18,31 @@ public class NetworkResolver {
 
     private static final LinkedHashMap<NetworkParameters, String> networkNames = new LinkedHashMap<>();
     private static final LinkedHashMap<String, NetworkParameters> networksByName = new LinkedHashMap<>();
-    public static ResourceBundle resource;
+    private static final LinkedHashMap<NetworkParameters, NetworkCode> networkCodes = new LinkedHashMap<>();
+    private static final LinkedHashMap<NetworkCode, NetworkParameters> networksByCode = new LinkedHashMap<>();
 
-    static {
-        registerNetwork(MainNetParams.get(), "Bitcoin");
-        registerNetwork(TestNet3Params.get(), "Bitcoin test");
-        registerNetwork(LitecoinMainNetParams.get(), "Litecoin");
-        registerNetwork(DogecoinMainNetParams.get(), "Dogecoin");
-        registerNetwork(DogecoinTestNet3Params.get(), "Dogecoin test");
+    public enum NetworkCode { // This is way more type safe than some String
+        BTC,
+        BTCTEST,
+        LTC,
+        LTCTEST,
+        DOGE,
+        DOGETEST
     }
 
-    private static void registerNetwork(final NetworkParameters params, final String name) {
+    static {
+        registerNetwork(MainNetParams.get(), "Bitcoin", NetworkCode.BTC);
+        registerNetwork(TestNet3Params.get(), "Bitcoin test", NetworkCode.BTCTEST);
+        registerNetwork(LitecoinMainNetParams.get(), "Litecoin", NetworkCode.LTC);
+        registerNetwork(DogecoinMainNetParams.get(), "Dogecoin", NetworkCode.DOGE);
+        registerNetwork(DogecoinTestNet3Params.get(), "Dogecoin test", NetworkCode.DOGETEST);
+    }
+
+    private static void registerNetwork(final NetworkParameters params, final String name, NetworkCode code) {
         networkNames.put(params, name);
         networksByName.put(name, params);
+        networkCodes.put(params, code);
+        networksByCode.put(code, params);
     }
 
     /**
@@ -41,6 +52,14 @@ public class NetworkResolver {
      */
     public static Set<String> getNames() {
         return networksByName.keySet();
+    }
+
+    /**
+     * Get all network codes the resolver knows about.
+     * @return a set of network explicit network codes
+     */
+    public static Set<NetworkCode> getCodes() {
+        return networksByCode.keySet();
     }
 
     /**
@@ -56,7 +75,15 @@ public class NetworkResolver {
         return networkNames.get(params);
     }
 
+    public static NetworkCode getCode(NetworkParameters params) {
+        return networkCodes.get(params);
+    }
+
     public static NetworkParameters getParameter(String name) {
         return networksByName.get(name);
+    }
+
+    public static NetworkParameters getParameter(NetworkCode code) {
+        return networksByCode.get(code);
     }
 }
