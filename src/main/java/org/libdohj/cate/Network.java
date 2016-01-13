@@ -28,6 +28,7 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 
 import com.google.common.util.concurrent.Service;
+import java.util.function.BiConsumer;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -79,6 +80,7 @@ public class Network extends WalletAppKit {
 
     private final EventBridge eventBridge;
     private final MainController controller;
+    private final BiConsumer<Network, Wallet> registerWalletHook;
     private final Logger logger = LoggerFactory.getLogger(Network.class);
 
     private final SimpleStringProperty estimatedBalance = new SimpleStringProperty("0");
@@ -109,13 +111,15 @@ public class Network extends WalletAppKit {
      * can be attached to it).
      */
     public Network(final Context context, final MainController controller,
-            final File directory, final Executor networkExecutor) {
+            final File directory, final Executor networkExecutor,
+            final BiConsumer<Network, Wallet> registerWalletHook) {
         super(context, directory, "cate_" + context.getParams().getId());
         this.controller = controller;
         this.networkExecutor = networkExecutor;
         eventBridge = new EventBridge();
         autoStop = false;
         blockingStartup = true;
+        this.registerWalletHook = registerWalletHook;
         
         addListener(new Service.Listener() {
             @Override
@@ -128,7 +132,6 @@ public class Network extends WalletAppKit {
                             + params.getId(), ex);
                 }
                 encrypted.set(wallet().isEncrypted());
-                controller.registerWallet(Network.this, wallet());
             }
 
             @Override
@@ -145,6 +148,7 @@ public class Network extends WalletAppKit {
         peerGroup().addConnectionEventListener(eventBridge);
         chain().addNewBestBlockListener(eventBridge);
         wallet().addCoinEventListener(eventBridge);
+        registerWalletHook.accept(this, this.wallet());
     }
 
     public StringProperty getEstimatedBalanceProperty() {

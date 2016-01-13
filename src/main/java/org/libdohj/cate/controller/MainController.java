@@ -133,11 +133,10 @@ public class MainController {
 
     /** All networks this controller is aware of */
     private final ObservableList<Network> networks = FXCollections.observableArrayList();
-    /** All networks which are in a running state */
+    /** All networks which are in starting or running state */
     private final ObservableList<Network> activeNetworks = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
-    private final Map<Network, ExecutorService> executors = new HashMap<>();
-    private final Map<Network, StringProperty> networkStatuses = new HashMap<>();
+    private final Map<Network, NetworkDetail> networkDetails = new HashMap<>();
     private KeyCrypterScrypt keyCrypter;
 
     private final Logger logger = LoggerFactory.getLogger(MainController.class);
@@ -191,7 +190,7 @@ public class MainController {
         final Context context = new Context(params);
         final NetworkThreadFactory threadFactory = new NetworkThreadFactory(context);
         final ExecutorService executor = Executors.newSingleThreadExecutor(threadFactory);
-        final Network network = new Network(context, this, dataDir, executor);
+        final Network network = new Network(context, this, dataDir, executor, this::registerWallet);
         final StringProperty statusProperty = new SimpleStringProperty("Starting");
 
         threadFactory.setUncaughtExceptionHandler(buildUncaughtExceptionHandler(network));
@@ -207,7 +206,6 @@ public class MainController {
 
             @Override
             public void running() {
-                // TODO: Should reflect syncing/synced
                 statusProperty.setValue(resources.getString("walletList.networkStatus.running"));
             }
 
@@ -229,10 +227,8 @@ public class MainController {
             }
         }, executor);
 
-        // Record the executor in case we want to do anything with it later.
-        executors.put(network, executor);
-
-        networkStatuses.put(network, statusProperty);
+        final NetworkDetail detail = new NetworkDetail(executor, statusProperty);
+        networkDetails.put(network, detail);
 
         final Service service = network.startAsync();
         return service;
@@ -723,7 +719,17 @@ public class MainController {
     }
 
     private StringProperty getStatusProperty(Network network) {
-        return networkStatuses.get(network);
+        return networkDetails.get(network).statusProperty;
+    }
+
+    private class NetworkDetail extends Object {
+        private StringProperty statusProperty;
+        private ExecutorService executor;
+
+        private NetworkDetail(final ExecutorService executor, final StringProperty statusProperty) {
+           this.executor = executor;
+           this.statusProperty = statusProperty;
+        }
     }
 
     private class WalletToNetworkNameConvertor extends StringConverter<Network> {
