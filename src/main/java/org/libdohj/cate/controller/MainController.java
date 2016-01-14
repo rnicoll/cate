@@ -57,10 +57,13 @@ import javafx.scene.layout.GridPane;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
+import java.awt.Toolkit;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import javafx.beans.property.StringProperty;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.DataFormat;
 
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.CATE;
@@ -243,10 +246,13 @@ public class MainController {
         txList.setRowFactory(value ->{
             final TableRow<WalletTransaction> row = new TableRow<>();
             final ContextMenu rowMenu = new ContextMenu();
+            final MenuItem transactionIdItem = new MenuItem(resources.getString("menuItem.copyTransactionId"));
             final MenuItem explorerItem = new MenuItem(resources.getString("menuItem.showOnExplorer"));
 
+            transactionIdItem.setOnAction(action -> copyTransactionId(row.getItem()));
             explorerItem.setOnAction(action -> openBlockExplorer(row.getItem()));
 
+            rowMenu.getItems().add(transactionIdItem);
             rowMenu.getItems().add(explorerItem);
 
             row.contextMenuProperty().set(rowMenu);
@@ -738,6 +744,11 @@ public class MainController {
 
         Collections.reverse(tempTransactions);
         return tempTransactions;
+    }
+
+    private void copyTransactionId(WalletTransaction item) {
+        final Clipboard clipboard = Clipboard.getSystemClipboard();
+        clipboard.setContent(Collections.singletonMap(DataFormat.PLAIN_TEXT, item.getTransaction().getHashAsString()));
     }
 
     private StringProperty getStatusProperty(Network network) {
