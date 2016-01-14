@@ -34,6 +34,7 @@ public class NetworkResolverTest {
     public void shouldListNetworks() {
         assertFalse(NetworkResolver.getParameters().isEmpty());
         assertFalse(NetworkResolver.getNames().isEmpty());
+        assertFalse(NetworkResolver.getCodes().isEmpty());
     }
 
     /**
@@ -43,7 +44,9 @@ public class NetworkResolverTest {
     public void shouldMapSymmetrically() {
         for (NetworkParameters params: NetworkResolver.getParameters()) {
             final String name = NetworkResolver.getName(params);
+            final NetworkResolver.NetworkCode code = NetworkResolver.getCode(params);
             assertEquals(params, NetworkResolver.getParameter(name));
+            assertEquals(params, NetworkResolver.getParameter(code));
         }
     }
 }

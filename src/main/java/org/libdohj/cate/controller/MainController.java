@@ -29,6 +29,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.ResourceBundle;
 
+import com.sun.deploy.uitoolkit.impl.fx.HostServicesFactory;
+import com.sun.javafx.application.HostServicesDelegate;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
@@ -61,6 +63,8 @@ import java.util.stream.Collectors;
 import javafx.beans.property.StringProperty;
 
 import org.controlsfx.control.NotificationPane;
+import org.libdohj.cate.CATE;
+import org.libdohj.cate.util.BlockExplorerResolver;
 import org.libdohj.cate.util.NetworkResolver;
 import org.spongycastle.crypto.params.KeyParameter;
 
@@ -236,6 +240,19 @@ public class MainController {
 
     private void initializeTransactionList() {
         txList.setItems(transactions);
+        txList.setRowFactory(value ->{
+            final TableRow<WalletTransaction> row = new TableRow<>();
+            final ContextMenu rowMenu = new ContextMenu();
+            final MenuItem explorerItem = new MenuItem(resources.getString("menuItem.showOnExplorer"));
+
+            explorerItem.setOnAction(action -> openBlockExplorer(row.getItem()));
+
+            rowMenu.getItems().add(explorerItem);
+
+            row.contextMenuProperty().set(rowMenu);
+
+            return row;
+        });
         txNetworkColumn.setCellValueFactory(dataFeatures -> {
             final WalletTransaction transaction = dataFeatures.getValue();
             final NetworkParameters params = transaction.getParams();
@@ -254,6 +271,11 @@ public class MainController {
             final WalletTransaction transaction = dataFeatures.getValue();
             return new SimpleStringProperty(transaction.getTransaction().getMemo());
         });
+    }
+
+    private void openBlockExplorer(WalletTransaction item) {
+        HostServicesDelegate hostServices = HostServicesFactory.getInstance(CATE.getInstance());
+        hostServices.showDocument(BlockExplorerResolver.getUrl(item));
     }
 
     private void initializeWalletList() {

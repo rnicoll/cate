@@ -15,10 +15,8 @@
  */
 package org.libdohj.cate;
 
-import com.google.common.util.concurrent.Service;
 import java.io.File;
 import java.util.ResourceBundle;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Level;
@@ -42,6 +40,8 @@ import org.libdohj.cate.util.NetworkResolver;
  */
 public class CATE extends Application {
 
+    private static CATE instance;
+
     private static final String APPLICATION_NAME_FOLDER = "CATE";
     private static Logger logger = Logger.getLogger(CATE.class.getName());
     private static final DataDirFactory dataDirFactory = new DataDirFactory(APPLICATION_NAME_FOLDER);
@@ -50,6 +50,18 @@ public class CATE extends Application {
 
     private MainController controller;
     private ExecutorService listenerExecutor = Executors.newSingleThreadExecutor();
+
+    public CATE() {
+        instance = this;
+    }
+
+    /**
+     * Get the current Application instance
+     * @return The current Application/CATE instance
+     */
+    public static CATE getInstance() {
+        return instance;
+    }
 
     @Override
     public void start(Stage primaryStage) throws Exception {
