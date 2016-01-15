@@ -59,8 +59,8 @@ import javafx.util.StringConverter;
 import com.google.common.util.concurrent.Service;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 import javafx.beans.property.StringProperty;
+import javafx.stage.WindowEvent;
 
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.CATE;
@@ -142,6 +142,8 @@ public class MainController {
     private KeyCrypterScrypt keyCrypter;
 
     private final Logger logger = LoggerFactory.getLogger(MainController.class);
+    private CATE cate;
+    private volatile boolean stopping = false;
 
     @FXML
     public void initialize() {
@@ -176,7 +178,7 @@ public class MainController {
         });
 
         menuExit.setOnAction((ActionEvent event) -> {
-            Platform.exit();
+            MainController.this.stop();
         });
     }
 
@@ -654,13 +656,37 @@ public class MainController {
     /**
      * Stops the controller, which includes shutting down the various networks
      * it is managing.
-     *
-     * @return a list of services which have been notified to stop.
      */
-    public List<Service> stop() {
-        return networks.stream()
-                .map(network -> network.stopAsync())
-                .collect(Collectors.toList());
+    public void stop(final WindowEvent event) {
+        stop();
+    }
+
+    /**
+     * Stops the controller, which includes shutting down the various networks
+     * it is managing.
+     */
+    private void stop() {
+        if (stopping) {
+            return;
+        }
+        stopping = true;
+        final Alert alert = new Alert(Alert.AlertType.INFORMATION, resources.getString("alert.shuttingDown"));
+        alert.setTitle(resources.getString("alert.shuttingDown.title"));
+        alert.getButtonTypes().clear();
+        Platform.runLater(() -> {
+            alert.show();
+        });
+        networks.stream()
+            .forEach(network -> {
+                logger.info("Shutting down " + network);
+                network.stopAsync();
+            });
+        new Thread(() -> {
+            networks.stream()
+                .forEach(service -> service.awaitTerminated());
+            alert.hide();
+            Platform.exit();
+        }).start();
     }
 
     /**
@@ -685,7 +711,7 @@ public class MainController {
                 });
             } else {
                 // Fatal, begin shutdown
-                Platform.exit();
+                MainController.this.stop();
             }
         };
     }
@@ -760,6 +786,14 @@ public class MainController {
 
     private StringProperty getStatusProperty(Network network) {
         return networkDetails.get(network).statusProperty;
+    }
+
+    public CATE getCate() {
+        return cate;
+    }
+
+    public void setCate(CATE cate) {
+        this.cate = cate;
     }
 
     private class NetworkDetail extends Object {

@@ -27,6 +27,7 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
+import javax.swing.event.HyperlinkEvent;
 
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.controller.MainController;
@@ -80,6 +81,9 @@ public class CATE extends Application {
 
         NotificationPane notificationPane = new NotificationPane(root);
         this.controller.setNotificationPane(notificationPane);
+        this.controller.setCate(this);
+
+        primaryStage.setOnCloseRequest(this.controller::stop);
 
         primaryStage.setTitle(i18nBundle.getString("application.title"));
         primaryStage.setScene(new Scene(notificationPane, 800, 500));
@@ -88,11 +92,6 @@ public class CATE extends Application {
 
     @Override
     public void stop() {
-        // Wait until all the services stop before we shut down the state change
-        // executor
-        // TODO: We should have the listenerExecutor actually shut itself down
-        // instead of blocking here
-        this.controller.stop().stream().forEach(service -> service.awaitTerminated());
         listenerExecutor.shutdown();
     }
 

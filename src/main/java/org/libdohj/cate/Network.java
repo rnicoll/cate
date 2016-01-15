@@ -314,6 +314,11 @@ public class Network extends WalletAppKit {
         }
     }
 
+    @Override
+    public String toString() {
+        return params.getId();
+    }
+
     public class EventBridge implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletEventListener {
 
         private EventBridge() {
