@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.image.*?>
+<?import java.lang.*?>
+<?import javafx.geometry.*?>
+<?import javafx.scene.text.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox maxHeight="-Infinity" maxWidth="-Infinity" minHeight="-Infinity" minWidth="-Infinity" prefHeight="330.0" prefWidth="850.0" xmlns="http://javafx.com/javafx/null" xmlns:fx="http://javafx.com/fxml/1">
+   <children>
+      <GridPane VBox.vgrow="ALWAYS">
+        <columnConstraints>
+          <ColumnConstraints fillWidth="false" hgrow="SOMETIMES" minWidth="175.0" prefWidth="175.0" />
+          <ColumnConstraints hgrow="ALWAYS" minWidth="10.0" prefWidth="100.0" />
+        </columnConstraints>
+        <rowConstraints>
+          <RowConstraints minHeight="40.0" prefHeight="40.0" vgrow="SOMETIMES" />
+          <RowConstraints minHeight="40.0" prefHeight="40.0" vgrow="SOMETIMES" />
+          <RowConstraints minHeight="40.0" prefHeight="40.0" vgrow="SOMETIMES" />
+          <RowConstraints minHeight="40.0" prefHeight="40.0" vgrow="SOMETIMES" />
+          <RowConstraints fx:id="rowFee" minHeight="40.0" prefHeight="40.0" vgrow="SOMETIMES" />
+          <RowConstraints fx:id="rowGross" minHeight="40.0" prefHeight="40.0" vgrow="SOMETIMES" />
+          <RowConstraints minHeight="40.0" prefHeight="40.0" vgrow="SOMETIMES" />
+          <RowConstraints minHeight="50.0" prefHeight="50.0" vgrow="SOMETIMES" />
+        </rowConstraints>
+         <children>
+            <Label fx:id="lbStatus" text="%txDetails.status" GridPane.rowIndex="0">
+               <font>
+                  <Font name="System Bold" size="18.0" />
+               </font>
+            </Label>
+             <Label fx:id="lbTime" text="%txDetails.time" GridPane.rowIndex="1">
+               <font>
+                  <Font name="System Bold" size="18.0" />
+               </font>
+            </Label>
+             <Label fx:id="lbTo" text="%txDetails.to" GridPane.rowIndex="2">
+               <font>
+                  <Font name="System Bold" size="18.0" />
+               </font>
+            </Label>
+             <Label fx:id="lbAmount" text="%txDetails.amount" GridPane.rowIndex="3">
+               <font>
+                  <Font name="System Bold" size="18.0" />
+               </font>
+            </Label>
+             <Label fx:id="lbFee" text="%txDetails.fee" GridPane.rowIndex="4">
+               <font>
+                  <Font name="System Bold" size="18.0" />
+               </font>
+            </Label>
+             <Label fx:id="lbGross" text="%txDetails.gross" GridPane.rowIndex="5">
+               <font>
+                  <Font name="System Bold" size="18.0" />
+               </font>
+            </Label>
+             <Label fx:id="lbID" text="%txDetails.id" GridPane.rowIndex="6">
+               <font>
+                  <Font name="System Bold" size="18.0" />
+               </font>
+            </Label>
+            <Button fx:id="btnClose" mnemonicParsing="false" onAction="#onBtnCloseAction" text="Close" GridPane.columnIndex="1" GridPane.halignment="RIGHT" GridPane.rowIndex="7" />
+            <Label fx:id="valStatus" text="" GridPane.columnIndex="1" GridPane.rowIndex="0" />
+            <Label fx:id="valTime" text="" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+            <Label fx:id="valTo" text="" GridPane.columnIndex="1" GridPane.rowIndex="2">
+               <GridPane.margin>
+                  <Insets right="45.0" />
+               </GridPane.margin></Label>
+            <Label fx:id="valAmount" text="" GridPane.columnIndex="1" GridPane.rowIndex="3" />
+            <Label fx:id="valFee" text="" GridPane.columnIndex="1" GridPane.rowIndex="4" />
+            <Label fx:id="valGross" text="" GridPane.columnIndex="1" GridPane.rowIndex="5" />
+            <Label fx:id="valID" text="" GridPane.columnIndex="1" GridPane.rowIndex="6">
+               <GridPane.margin>
+                  <Insets right="45.0" />
+               </GridPane.margin></Label>
+            <Button fx:id="btnCopyId" mnemonicParsing="false" GridPane.columnIndex="1" GridPane.halignment="RIGHT" GridPane.rowIndex="6" onAction="#onBtnCopyIdAction">
+               <graphic>
+                  <ImageView fitHeight="28.0" fitWidth="28.0" pickOnBounds="true" preserveRatio="true">
+                     <image>
+                        <Image url="@org/libdohj/cate/editcopy.png" />
+                     </image>
+                  </ImageView>
+               </graphic>
+            </Button>
+            <Button fx:id="btnCopyTo" mnemonicParsing="false" GridPane.columnIndex="1" GridPane.halignment="RIGHT" GridPane.rowIndex="2" onAction="#onBtnCopyToAction">
+               <graphic>
+                   <ImageView fitHeight="28.0" fitWidth="28.0" pickOnBounds="true" preserveRatio="true">
+                       <image>
+                           <Image url="@org/libdohj/cate/editcopy.png" />
+                       </image>
+                   </ImageView>
+               </graphic>
+            </Button>
+         </children>
+         <padding>
+            <Insets bottom="8.0" left="8.0" right="8.0" top="8.0" />
+         </padding>
+      </GridPane>
+   </children>
+</VBox>

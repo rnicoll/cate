@@ -57,18 +57,14 @@ import javafx.scene.layout.GridPane;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
-import java.awt.Toolkit;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import javafx.beans.property.StringProperty;
-import javafx.scene.input.Clipboard;
-import javafx.scene.input.DataFormat;
 
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.CATE;
-import org.libdohj.cate.util.BlockExplorerResolver;
-import org.libdohj.cate.util.NetworkResolver;
+import org.libdohj.cate.util.*;
 import org.spongycastle.crypto.params.KeyParameter;
 
 import org.bitcoinj.core.Address;
@@ -85,7 +81,6 @@ import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
 
 import org.libdohj.cate.Network;
-import org.libdohj.cate.util.NetworkThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -248,14 +243,26 @@ public class MainController {
             final ContextMenu rowMenu = new ContextMenu();
             final MenuItem transactionIdItem = new MenuItem(resources.getString("menuItem.copyTransactionId"));
             final MenuItem explorerItem = new MenuItem(resources.getString("menuItem.showOnExplorer"));
+            final MenuItem detailsItem = new MenuItem(resources.getString("menuItem.txDetails"));
+            final MenuItem receivingAddressItem = new MenuItem(resources.getString("menuItem.receivingAddress"));
 
-            transactionIdItem.setOnAction(action -> copyTransactionId(row.getItem()));
+            transactionIdItem.setOnAction(action -> GenericUtils.copyToClipboard(row.getItem().getTransaction().getHashAsString()));
             explorerItem.setOnAction(action -> openBlockExplorer(row.getItem()));
+            detailsItem.setOnAction(action -> showTxDetailsDialog(row.getItem()));
 
-            rowMenu.getItems().add(transactionIdItem);
-            rowMenu.getItems().add(explorerItem);
+            receivingAddressItem.setOnAction(action -> GenericUtils.copyToClipboard(
+                    TransactionFormatter.getRelevantOutputs(row.getItem()).get(0).getScriptPubKey().getToAddress(
+                            row.getItem().getParams()).toString()));
+
+            rowMenu.getItems().addAll(transactionIdItem, receivingAddressItem, detailsItem, explorerItem);
 
             row.contextMenuProperty().set(rowMenu);
+
+            row.setOnMouseClicked(event -> {
+                if (event.getClickCount() == 2 && (!row.isEmpty())) {
+                    showTxDetailsDialog(row.getItem());
+                }
+            });
 
             return row;
         });
@@ -282,6 +289,11 @@ public class MainController {
     private void openBlockExplorer(WalletTransaction item) {
         HostServicesDelegate hostServices = HostServicesFactory.getInstance(CATE.getInstance());
         hostServices.showDocument(BlockExplorerResolver.getUrl(item));
+    }
+
+    private void showTxDetailsDialog(WalletTransaction item) {
+        TransactionDetailsDialog dialog = new TransactionDetailsDialog(item);
+        dialog.showAndWait();
     }
 
     private void initializeWalletList() {
@@ -744,11 +756,6 @@ public class MainController {
 
         Collections.reverse(tempTransactions);
         return tempTransactions;
-    }
-
-    private void copyTransactionId(WalletTransaction item) {
-        final Clipboard clipboard = Clipboard.getSystemClipboard();
-        clipboard.setContent(Collections.singletonMap(DataFormat.PLAIN_TEXT, item.getTransaction().getHashAsString()));
     }
 
     private StringProperty getStatusProperty(Network network) {
