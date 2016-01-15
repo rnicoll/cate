@@ -57,9 +57,12 @@ import javafx.scene.layout.GridPane;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
+import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.property.StringProperty;
+import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 
 import org.controlsfx.control.NotificationPane;
@@ -269,22 +272,16 @@ public class MainController {
             return row;
         });
         txNetworkColumn.setCellValueFactory(dataFeatures -> {
-            final WalletTransaction transaction = dataFeatures.getValue();
-            final NetworkParameters params = transaction.getParams();
-            return new SimpleStringProperty(NetworkResolver.getName(params));
+            return dataFeatures.getValue().networkNameProperty();
         });
         txDateColumn.setCellValueFactory(dataFeatures -> {
-            final WalletTransaction transaction = dataFeatures.getValue();
-            final DateFormat dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT);
-            return new SimpleStringProperty(dateFormat.format(transaction.getTransaction().getUpdateTime()));
+            return dataFeatures.getValue().dateProperty();
         });
         txAmountColumn.setCellValueFactory(dataFeatures -> {
-            final WalletTransaction transaction = dataFeatures.getValue();
-            return new SimpleStringProperty(transaction.getBalanceChange().toPlainString());
+            return dataFeatures.getValue().amountProperty();
         });
         txMemoColumn.setCellValueFactory(dataFeatures -> {
-            final WalletTransaction transaction = dataFeatures.getValue();
-            return new SimpleStringProperty(transaction.getTransaction().getMemo());
+            return dataFeatures.getValue().memoProperty();
         });
     }
 
@@ -293,9 +290,19 @@ public class MainController {
         hostServices.showDocument(BlockExplorerResolver.getUrl(item));
     }
 
-    private void showTxDetailsDialog(WalletTransaction item) {
-        TransactionDetailsDialog dialog = new TransactionDetailsDialog(item);
-        dialog.showAndWait();
+    private boolean showTxDetailsDialog(WalletTransaction item) {
+        try {
+            final Stage dialog = TransactionDetailsDialog.build(resources, item);
+            dialog.showAndWait();
+            return true;
+        } catch (IOException e) {
+            logger.error(resources.getString("alert.txDetailsError"), e);
+            Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("alert.txDetailsError")
+                + e.getMessage());
+            alert.setTitle(resources.getString("internalError.title"));
+            alert.showAndWait();
+        }
+        return false;
     }
 
     private void initializeWalletList() {
@@ -828,45 +835,4 @@ public class MainController {
         }
     }
 
-    public static class WalletTransaction extends Object {
-
-        private final Network network;
-        private final Transaction transaction;
-        private final Coin balanceChange;
-
-        private WalletTransaction(final Network network,
-                final Transaction transaction, final Coin balanceChange) {
-            this.network = network;
-            this.transaction = transaction;
-            this.balanceChange = balanceChange;
-        }
-
-        /**
-         * @return the network
-         */
-        public Network getNetwork() {
-            return network;
-        }
-
-        /**
-         * @return the network params
-         */
-        public NetworkParameters getParams() {
-            return network.getParams();
-        }
-
-        /**
-         * @return the transaction
-         */
-        public Transaction getTransaction() {
-            return transaction;
-        }
-
-        /**
-         * @return the balanceChange
-         */
-        public Coin getBalanceChange() {
-            return balanceChange;
-        }
-    }
 }

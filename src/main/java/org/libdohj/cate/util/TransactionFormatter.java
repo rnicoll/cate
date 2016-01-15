@@ -6,6 +6,7 @@ import org.libdohj.cate.controller.MainController;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.libdohj.cate.controller.WalletTransaction;
 
 /**
  * Created by maxke on 15.01.2016.
@@ -20,7 +21,7 @@ public class TransactionFormatter {
      * @param wtx The WalletTransaction to filter the outputs from
      * @return All relevant outputs
      */
-    public static List<TransactionOutput> getRelevantOutputs(MainController.WalletTransaction wtx) {
+    public static List<TransactionOutput> getRelevantOutputs(WalletTransaction wtx) {
         List<TransactionOutput> outputs = new ArrayList<>();
         if (wtx.getBalanceChange().isPositive()) {
             // We received coins, so only use outputs concerning our wallet.
@@ -41,7 +42,7 @@ public class TransactionFormatter {
      * @param delimiter String to use a delimiter for the address list
      * @return a String as described above
      */
-    public static String getRelevantOutputsAsString(MainController.WalletTransaction wtx, String delimiter) {
+    public static String getRelevantOutputsAsString(WalletTransaction wtx, String delimiter) {
         return getRelevantOutputs(wtx).stream()
                 .map(output -> output.getScriptPubKey().getToAddress(wtx.getParams()).toString())
                 .collect(Collectors.joining(delimiter));

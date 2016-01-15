@@ -70,9 +70,9 @@ public class CATE extends Application {
         primaryStage.getIcons().add(cateIcon);
 
         // This line to resolve keys against the environment locale properties
-        ResourceBundle i18nBundle = ResourceBundle.getBundle("i18n.Bundle");
+        ResourceBundle resources = ResourceBundle.getBundle("i18n.Bundle");
 
-        FXMLLoader loader = new FXMLLoader(getClass().getResource("/main.fxml"), i18nBundle);
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/main.fxml"), resources);
         Parent root = loader.load();
 
         this.controller = (MainController) loader.getController();
@@ -85,7 +85,7 @@ public class CATE extends Application {
 
         primaryStage.setOnCloseRequest(this.controller::stop);
 
-        primaryStage.setTitle(i18nBundle.getString("application.title"));
+        primaryStage.setTitle(resources.getString("application.title"));
         primaryStage.setScene(new Scene(notificationPane, 800, 500));
         primaryStage.show();
     }

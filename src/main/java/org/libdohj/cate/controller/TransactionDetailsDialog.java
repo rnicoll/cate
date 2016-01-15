@@ -8,8 +8,6 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
-import javafx.scene.input.Clipboard;
-import javafx.scene.input.ClipboardContent;
 import javafx.scene.layout.RowConstraints;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -21,12 +19,13 @@ import java.io.IOException;
 import java.text.DateFormat;
 import java.text.MessageFormat;
 import java.util.ResourceBundle;
+import javafx.scene.control.TextField;
 
 /**
  * Created by maxke on 14.01.2016.
  * Shows a bunch of details about a selected {@link org.libdohj.cate.controller.MainController.WalletTransaction}
  */
-public class TransactionDetailsDialog extends Stage {
+public class TransactionDetailsDialog {
 
     @FXML // ResourceBundle that was given to the FXMLLoader
     private ResourceBundle resources;
@@ -57,6 +56,8 @@ public class TransactionDetailsDialog extends Stage {
     @FXML
     private Label valTo;
     @FXML
+    private TextField valMemo;
+    @FXML
     private Label valAmount;
     @FXML
     private Label valFee;
@@ -69,30 +70,16 @@ public class TransactionDetailsDialog extends Stage {
     @FXML
     private RowConstraints rowGross;
 
-    private MainController.WalletTransaction wtx;
+    private Stage stage;
+    private WalletTransaction wtx;
 
-    public TransactionDetailsDialog(MainController.WalletTransaction transaction) {
-        this.wtx = transaction;
-        ResourceBundle i18nBundle = ResourceBundle.getBundle("i18n.Bundle");
+    @FXML
+    public void initialize() {
+        
+    }
 
-        FXMLLoader loader = new FXMLLoader(TransactionDetailsDialog.class.getResource("/txDetailsDialog.fxml"), i18nBundle);
-        loader.setController(this);
-
-        try {
-            setScene(new Scene(loader.load()));
-        } catch (IOException e) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("alert.txDetailsError")
-                    + e.getMessage());
-            alert.setTitle(resources.getString("internalError.title"));
-            alert.showAndWait();
-            return;
-        }
-
-        setTitle(resources.getString("txDetails.title"));
-        initModality(Modality.APPLICATION_MODAL);
-        setResizable(false);
-        getIcons().add(new Image("/org/libdohj/cate/cate.png"));
-
+    private void setTransaction(final WalletTransaction transaction) {
+        wtx = transaction;
         valStatus.setText(MessageFormat.format(resources.getString("txDetails.conf"), wtx.getTransaction().getConfidence().getDepthInBlocks()));
 
         final DateFormat dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT);
@@ -116,15 +103,38 @@ public class TransactionDetailsDialog extends Stage {
         }
 
         valTo.setText(TransactionFormatter.getRelevantOutputsAsString(wtx, ", "));
-
+        valMemo.setText(wtx.getMemo());
+        wtx.memoProperty().bind(valMemo.textProperty());
         valAmount.setText(wtx.getNetwork().format(amount).toString());
 
         valID.setText(wtx.getTransaction().getHashAsString());
     }
 
+    /**
+     * Construct and return a transaction details dialog window.
+     */
+    public static Stage build(final ResourceBundle resources, final WalletTransaction transaction)
+        throws IOException {
+        final Stage stage = new Stage();
+        final FXMLLoader loader = new FXMLLoader(TransactionDetailsDialog.class.getResource("/txDetailsDialog.fxml"), resources);
+
+        stage.setScene(new Scene(loader.load()));
+        final TransactionDetailsDialog controller = loader.getController();
+
+        controller.setTransaction(transaction);
+        controller.stage = stage;
+
+        stage.setTitle(resources.getString("txDetails.title"));
+        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.setResizable(false);
+        stage.getIcons().add(new Image("/org/libdohj/cate/cate.png"));
+
+        return stage;
+    }
+
     @FXML
     void onBtnCloseAction(ActionEvent event) {
-        close();
+        stage.close();
     }
 
     @FXML

@@ -1,6 +1,7 @@
 package org.libdohj.cate.util;
 
 import org.libdohj.cate.controller.MainController;
+import org.libdohj.cate.controller.WalletTransaction;
 
 /**
  * Created by maxke on 13.01.2016.
@@ -17,12 +18,12 @@ public class BlockExplorerResolver {
     private static final String CHAINSO_PATH_LTCTEST = "LTCTEST/";
     private static final String CHAINSO_PATH_DOGETEST = "DOGETEST/";
 
-    public static String getUrl(MainController.WalletTransaction wtx) {
+    public static String getUrl(WalletTransaction wtx) {
         // TODO: This should take into account a setting the user can make for the explorer to use.
         return getChainSoUrl(wtx);
     }
 
-    public static String getChainSoUrl(MainController.WalletTransaction wtx) {
+    public static String getChainSoUrl(WalletTransaction wtx) {
         StringBuilder sb = new StringBuilder(CHAINSO_BASE_URL);
         sb.append(CHAINSO_PATH_TX);
         sb.append(networkCodeToPath(NetworkResolver.getCode(wtx.getParams())));
