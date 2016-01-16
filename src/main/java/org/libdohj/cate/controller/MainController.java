@@ -16,7 +16,9 @@
 package org.libdohj.cate.controller;
 
 import java.io.File;
-import java.text.DateFormat;
+import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,9 +35,9 @@ import com.sun.deploy.uitoolkit.impl.fx.HostServicesFactory;
 import com.sun.javafx.application.HostServicesDelegate;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
+import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.concurrent.Task;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Alert;
@@ -54,16 +56,11 @@ import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.Node;
 import javafx.scene.layout.GridPane;
+import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
-import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import javafx.beans.property.ReadOnlyStringProperty;
-import javafx.beans.property.StringProperty;
-import javafx.stage.Stage;
-import javafx.stage.WindowEvent;
 
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.CATE;
@@ -95,6 +92,7 @@ import org.slf4j.LoggerFactory;
  */
 public class MainController {
 
+    private static final int BANNER_DISPLAY_MILLIS = 3000;
     private static final int NETWORK_PUSH_TIMEOUT_MILLIS = 500;
 
     @FXML // ResourceBundle that was given to the FXMLLoader
@@ -519,19 +517,18 @@ public class MainController {
             return;
         }
 
-        final TransactionConfirmationAlert confirmSend = new TransactionConfirmationAlert(network.getParams());
+        final TransactionConfirmationAlert confirmSend
+            = new TransactionConfirmationAlert(network.getParams(), this.resources);
 
         // TODO: Show details of fees and total including fees
-        confirmSend.setTitle(resources.getString("sendCoins.confirm.title"));
-        confirmSend.setAddressLabel(resources.getString("sendCoins.confirm.address"));
-        confirmSend.setAmountLabel(resources.getString("sendCoins.confirm.amount"));
         confirmSend.setAddress(address);
         confirmSend.setAmount(amount);
+        confirmSend.setMemo("");
         confirmSend.initOwner(((Node) event.getTarget()).getScene().getWindow());
 
         confirmSend.showAndWait()
                 .filter(response -> response == ButtonType.OK)
-                .ifPresent(response -> doSendCoins(network, address, amount));
+                .ifPresent(response -> doSendCoins(network, address, amount, confirmSend.getMemo().trim()));
     }
 
     /**
@@ -541,8 +538,10 @@ public class MainController {
      * @param address the recipient address to send coins to.
      * @param amount the amount of coins to send.
      */
-    private void doSendCoins(final Network network, final Address address, final Coin amount) {
+    private void doSendCoins(final Network network, final Address address, final Coin amount, final String memo) {
         final Wallet.SendRequest req = Wallet.SendRequest.to(address, amount);
+
+        req.memo = memo;
 
         // Prompt for password if the wallet is encrypted
         // TODO: Should have an unlock() method we call here,
@@ -558,7 +557,11 @@ public class MainController {
 
         network.sendCoins(req,
                 (Wallet.SendResult sendResult) -> {
-                    showTopBanner(resources.getString("doSendCoin.successNotification"));
+                    Platform.runLater(() -> {
+                        showTopBannerOnUIThread(resources.getString("doSendCoin.successNotification"));
+                        sendAddress.clear();
+                        sendAmount.clear();
+                    });
                 }, (Coin missing) -> {
                     Platform.runLater(() -> {
                         Alert alert = new Alert(Alert.AlertType.WARNING);
@@ -588,30 +591,28 @@ public class MainController {
     }
 
     /**
-     * Show a top banner with a 3 second timeout and the specified text
+     * Show a top banner with a 3 second timeout and the specified text. Must
+     * be called from the UI thread.
+     *
      * @param text Text to show in the banner.
      */
-    private void showTopBanner(String text) {
-        Platform.runLater(() -> {
-            notificationPane.setText(text);
-            notificationPane.getStyleClass().add(NotificationPane.STYLE_CLASS_DARK);
-            notificationPane.show();
-        });
-        Task<Void> hideTask = new Task<Void>() {
-            @Override
-            protected Void call() throws Exception {
-                try {
-                    Thread.sleep(3000);
-                } catch (InterruptedException ignored) {}
-                return null;
+    private void showTopBannerOnUIThread(String text) {
+        notificationPane.setText(text);
+        notificationPane.getStyleClass().add(NotificationPane.STYLE_CLASS_DARK);
+        notificationPane.show();
+        // TODO: We should have a single persistent thread that does this, and
+        // handles resetting the timer if a new banner is shown before the old is
+        // hidden
+        new Thread(() -> {
+            try {
+                Thread.sleep(BANNER_DISPLAY_MILLIS);
+            } catch (InterruptedException ex) {
+                // Ignore
             }
-        };
-        hideTask.setOnSucceeded(event -> {
             Platform.runLater(() -> {
                 notificationPane.hide();
             });
-        });
-        new Thread(hideTask).start();
+        }).start();
     }
 
     private KeyParameter getAESKeyFromUser(final Network network) {
@@ -758,10 +759,6 @@ public class MainController {
         rawTransactions.addAll(wallet.getTransactions(false));
 
         final Map<TransactionOutPoint, Coin> balances = new HashMap<>();
-        // TODO: Should get the value change or information on relevant outputs
-        // or something more useful form Wallet
-        // Meanwhile we do a bunch of duplicate work to recalculate these values,
-        // here
         for (Transaction tx : rawTransactions) {
             long valueChange = 0;
             for (TransactionInput in : tx.getInputs()) {

@@ -36,6 +36,8 @@
                 <TextField fx:id="myAddress" editable="false" minWidth="260"/>
             </HBox>
 
+            <Separator />
+
             <TableView fx:id="txList" VBox.vgrow="ALWAYS">
                 <VBox.margin>
                     <Insets bottom="5.0" left="0.0" right="0.0" top="5.0"/>
@@ -48,13 +50,14 @@
                 </columns>
             </TableView>
 
+            <Separator />
+
             <GridPane>
                 <VBox.margin>
                     <Insets bottom="10.0" left="0.0" right="0.0" top="5.0"/>
                 </VBox.margin>
                 <ComboBox fx:id="sendSelector" GridPane.columnIndex="0" GridPane.rowIndex="0" prefWidth="120" />
                 <TextField fx:id="sendAddress" promptText="%walletSend.sendAddress" GridPane.columnIndex="1" GridPane.rowIndex="0" GridPane.columnSpan="3" minWidth="260" />
-
                 <TextField fx:id="sendAmount" promptText="%walletSend.sendAmount" prefWidth="100" GridPane.columnIndex="1" GridPane.rowIndex="1" />
                 <Button fx:id="sendButton" mnemonicParsing="false" text="%walletSend.sendButton" GridPane.columnIndex="2" GridPane.rowIndex="1" />
             </GridPane>

@@ -15,11 +15,13 @@
  */
 package org.libdohj.cate.controller;
 
+import java.util.ResourceBundle;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 
 import org.bitcoinj.core.Address;
@@ -33,16 +35,23 @@ import org.bitcoinj.utils.MonetaryFormat;
 public class TransactionConfirmationAlert extends Alert {
     final GridPane grid;
     final Label content = new Label();
-    final Label amount = new Label("Amount:");
-    final Label address = new Label("Address:");
+    final Label amount = new Label();
+    final Label address = new Label();
+    final TextField memo = new TextField();
     final Label amountLabel = new Label();
     final Label addressLabel = new Label();
+    final Label memoLabel = new Label();
     final ObjectProperty<Address> addressProperty = new SimpleObjectProperty<>();
     final ObjectProperty<Coin> amountProperty = new SimpleObjectProperty<>();
     final MonetaryFormat format;
 
-    public TransactionConfirmationAlert(final NetworkParameters params) {
+    public TransactionConfirmationAlert(final NetworkParameters params, final ResourceBundle resources) {
         super(Alert.AlertType.CONFIRMATION);
+
+        setTitle(resources.getString("sendCoins.confirm.title"));
+        addressLabel.setText(resources.getString("sendCoins.confirm.address"));
+        amountLabel.setText(resources.getString("sendCoins.confirm.amount"));
+        memoLabel.setText(resources.getString("sendCoins.confirm.memo"));
 
         format = params.getMonetaryFormat();
         grid = new GridPane();
@@ -62,11 +71,14 @@ public class TransactionConfirmationAlert extends Alert {
         int row = 0;
         grid.add(content, 0, row++);
 
-        grid.add(amountLabel, 0, row);
-        grid.add(amount, 1, row++);
-
         grid.add(addressLabel, 0, row);
         grid.add(address, 1, row++);
+
+        grid.add(memoLabel, 0, row);
+        grid.add(memo, 1, row++);
+
+        grid.add(amountLabel, 0, row);
+        grid.add(amount, 1, row++);
 
         getDialogPane().setContent(grid);
     }
@@ -87,19 +99,19 @@ public class TransactionConfirmationAlert extends Alert {
         return amountProperty.get();
     }
 
-    public final void setAddress(final Address address) {
-        this.addressProperty.set(address);
+    public String getMemo() {
+        return memo.getText();
     }
 
-    public void setAddressLabel(final String label) {
-        this.addressLabel.setText(label);
+    public final void setAddress(final Address address) {
+        this.addressProperty.set(address);
     }
 
     public final void setAmount(final Coin amount) {
         this.amountProperty.set(amount);
     }
 
-    public void setAmountLabel(final String label) {
-        this.amountLabel.setText(label);
+    public void setMemo(String memo) {
+        this.memo.setText(memo);
     }
 }
