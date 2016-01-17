@@ -23,30 +23,32 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
 import javafx.scene.layout.GridPane;
+import org.libdohj.cate.CATE;
 
 /**
  * @author Qu3ntin0
  */
 public class PasswordInputDialog extends Dialog<String> {
-    final GridPane grid;
-    final PasswordField pass;
-    final Label content;
+    private final GridPane grid;
+    private final PasswordField pass;
+    private final Label heading;
 
     public PasswordInputDialog() {
         super();
         pass = new PasswordField();
         grid = new GridPane();
-        content = new Label();
+        heading = new Label();
 
+        heading.getStyleClass().add("label-heading");
         contentTextProperty().addListener((observable, oldVal, newVal) -> {
-            content.setText(newVal);
+            heading.setText(newVal);
         });
 
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.add(content, 0, 0);
-        grid.add(pass, 1, 0);
+        grid.setHgap(MainController.DIALOG_HGAP);
+        grid.setVgap(MainController.DIALOG_VGAP);
+        grid.addRow(0, heading, pass);
 
+        getDialogPane().getStylesheets().add(CATE.DEFAULT_STYLESHEET);
         getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
         getDialogPane().setContent(grid);
 

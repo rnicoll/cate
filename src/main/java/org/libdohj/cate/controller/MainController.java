@@ -416,45 +416,12 @@ public class MainController {
             return;
         }
 
-        Dialog<String> dialog = new Dialog<>();
+        DualPasswordInputDialog dialog = new DualPasswordInputDialog(resources);
         dialog.setTitle(resources.getString("dialogEncrypt.title"));
         dialog.setHeaderText(resources.getString("dialogEncrypt.msg"));
 
-        PasswordField pass1 = new PasswordField();
-        PasswordField pass2 = new PasswordField();
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.add(new Label(resources.getString("dialogEncrypt.passNew")), 0, 0);
-        grid.add(pass1, 1, 0);
-        grid.add(new Label(resources.getString("dialogEncrypt.passRepeat")), 0, 1);
-        grid.add(pass2, 1, 1);
-
-        ButtonType buttonTypeOk = new ButtonType(resources.getString("buttonType.Ok"), ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(buttonTypeOk, ButtonType.CANCEL);
-
-        dialog.getDialogPane().setContent(grid);
-
-        Platform.runLater(pass1::requestFocus);
-
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == buttonTypeOk) {
-                if (!pass1.getText().trim().isEmpty() && !pass2.getText().trim().isEmpty()) {
-                    if (Objects.equals(pass1.getText(), pass2.getText())) {
-                        return pass1.getText();
-                    } else {
-                        return resources.getString("responseType.False");
-                    }
-                } else {
-                    return resources.getString("responseType.False");
-                }
-            }
-            return null;
-        });
-
         dialog.showAndWait().ifPresent(value -> {
-            if (Objects.equals(value, resources.getString("responseType.False"))) {
+            if (value == null) {
                 Platform.runLater(() -> {
                     Alert alert = new Alert(Alert.AlertType.INFORMATION,
                             resources.getString("alert.encryptWallet.mismatchMsg"));
@@ -487,6 +454,8 @@ public class MainController {
             }
         });
     }
+    public static final int DIALOG_VGAP = 10;
+    public static final int DIALOG_HGAP = 10;
 
     /**
      * Take coin values to send from the user interface, prompt the user to

@@ -27,7 +27,6 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
-import javax.swing.event.HyperlinkEvent;
 
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.controller.MainController;
@@ -40,6 +39,7 @@ import org.libdohj.cate.util.NetworkResolver;
  * @author Ross Nicoll
  */
 public class CATE extends Application {
+    public static final String DEFAULT_STYLESHEET = "/cate.css";
 
     private static CATE instance;
 
@@ -75,6 +75,7 @@ public class CATE extends Application {
         FXMLLoader loader = new FXMLLoader(getClass().getResource("/main.fxml"), resources);
         Parent root = loader.load();
 
+        root.getStylesheets().add(DEFAULT_STYLESHEET);
         this.controller = (MainController) loader.getController();
         this.controller.connectTo(NetworkResolver.getParameter("Dogecoin"), dataDir);
         this.controller.connectTo(NetworkResolver.getParameter("Dogecoin test"), dataDir);

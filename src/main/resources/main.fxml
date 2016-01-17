@@ -27,7 +27,7 @@
                 <VBox.margin>
                     <Insets bottom="5.0" left="0.0" right="0.0" top="10.0"/>
                 </VBox.margin>
-                <Label text="%walletReceive.addressLabel">
+                <Label text="%walletReceive.addressLabel" styleClass="label-heading">
                     <HBox.margin>
                         <Insets bottom="0.0" left="0.0" right="10.0" top="0.0"/>
                     </HBox.margin>
@@ -69,7 +69,7 @@
             <BorderPane.margin>
                 <Insets bottom="10.0" left="5.0" right="10.0" top="10.0"/>
             </BorderPane.margin>
-            <Label text="%walletList.label" VBox.vgrow="NEVER" />
+            <Label text="%walletList.label" VBox.vgrow="NEVER" styleClass="label-heading" />
             <TableView fx:id="walletList" VBox.vgrow="ALWAYS">
                 <columns>
                     <TableColumn fx:id="networkName" text="%walletList.networkName.thead" prefWidth="95" />

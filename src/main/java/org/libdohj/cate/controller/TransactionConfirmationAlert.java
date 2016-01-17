@@ -19,7 +19,6 @@ import java.util.ResourceBundle;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
@@ -28,6 +27,7 @@ import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.utils.MonetaryFormat;
+import org.libdohj.cate.CATE;
 
 /**
  * @author Ross Nicoll
@@ -50,8 +50,11 @@ public class TransactionConfirmationAlert extends Alert {
 
         setTitle(resources.getString("sendCoins.confirm.title"));
         addressLabel.setText(resources.getString("sendCoins.confirm.address"));
+        addressLabel.getStyleClass().add("label-heading");
         amountLabel.setText(resources.getString("sendCoins.confirm.amount"));
+        amountLabel.getStyleClass().add("label-heading");
         memoLabel.setText(resources.getString("sendCoins.confirm.memo"));
+        memoLabel.getStyleClass().add("label-heading");
 
         format = params.getMonetaryFormat();
         grid = new GridPane();
@@ -66,20 +69,15 @@ public class TransactionConfirmationAlert extends Alert {
             address.setText(newVal.toBase58());
         });
 
-        grid.setHgap(10);
-        grid.setVgap(10);
+        grid.setHgap(MainController.DIALOG_HGAP);
+        grid.setVgap(MainController.DIALOG_VGAP);
         int row = 0;
-        grid.add(content, 0, row++);
+        grid.addRow(row++, content);
+        grid.addRow(row++, addressLabel, address);
+        grid.addRow(row++, memoLabel, memo);
+        grid.addRow(row++, amountLabel, amount);
 
-        grid.add(addressLabel, 0, row);
-        grid.add(address, 1, row++);
-
-        grid.add(memoLabel, 0, row);
-        grid.add(memo, 1, row++);
-
-        grid.add(amountLabel, 0, row);
-        grid.add(amount, 1, row++);
-
+        getDialogPane().getStylesheets().add(CATE.DEFAULT_STYLESHEET);
         getDialogPane().setContent(grid);
     }
 

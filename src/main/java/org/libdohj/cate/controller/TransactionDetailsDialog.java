@@ -20,6 +20,8 @@ import java.text.DateFormat;
 import java.text.MessageFormat;
 import java.util.ResourceBundle;
 import javafx.scene.control.TextField;
+import javafx.scene.text.Font;
+import org.libdohj.cate.CATE;
 
 /**
  * Created by maxke on 14.01.2016.
@@ -108,6 +110,11 @@ public class TransactionDetailsDialog {
         valAmount.setText(wtx.getNetwork().format(amount).toString());
 
         valID.setText(wtx.getTransaction().getHashAsString());
+
+        // Try to adapt the button sizes to match font
+        int buttonSize = (int) Math.round(Font.getDefault().getSize()) + 6;
+        btnCopyId.setMaxSize(buttonSize, buttonSize);
+        btnCopyTo.setMaxSize(buttonSize, buttonSize);
     }
 
     /**
@@ -117,8 +124,11 @@ public class TransactionDetailsDialog {
         throws IOException {
         final Stage stage = new Stage();
         final FXMLLoader loader = new FXMLLoader(TransactionDetailsDialog.class.getResource("/txDetailsDialog.fxml"), resources);
+        final Scene scene = new Scene(loader.load());
 
-        stage.setScene(new Scene(loader.load()));
+        scene.getStylesheets().add(CATE.DEFAULT_STYLESHEET);
+        stage.setScene(scene);
+
         final TransactionDetailsDialog controller = loader.getController();
 
         controller.setTransaction(transaction);
