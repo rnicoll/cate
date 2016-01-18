@@ -465,6 +465,7 @@ public class MainController {
         final Address address;
         final Coin amount;
         final Network network = (Network) sendSelector.getValue();
+        final Wallet.SendRequest req;
 
         try {
             address = Address.fromBase58(network.getParams(), sendAddress.getText());
@@ -478,9 +479,17 @@ public class MainController {
 
         try {
             amount = Coin.parseCoin(sendAmount.getText());
+            // The wallet send request will reject negative amounts as well, but
+            // by doing it here we can localize the error message.
+            if (!amount.isPositive()) {
+                Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("sendCoins.amountError.notPositive.msg"));
+                alert.setTitle(resources.getString("sendCoins.amountError.title"));
+                alert.showAndWait();
+                return;
+            }
+            req = Wallet.SendRequest.to(address, amount);
         } catch (IllegalArgumentException ex) {
-            Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("sendCoins.amountError.msg")
-                    + ex.getMessage());
+            Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("sendCoins.amountError.msg"));
             alert.setTitle(resources.getString("sendCoins.amountError.title"));
             alert.showAndWait();
             return;
@@ -496,22 +505,21 @@ public class MainController {
         confirmSend.initOwner(((Node) event.getTarget()).getScene().getWindow());
 
         confirmSend.showAndWait()
-                .filter(response -> response == ButtonType.OK)
-                .ifPresent(response -> doSendCoins(network, address, amount, confirmSend.getMemo().trim()));
+            .filter(response -> response == ButtonType.OK)
+            .ifPresent(response -> {
+                req.memo = confirmSend.getMemo().trim();
+                doSendCoins(network, req);
+        });
     }
 
     /**
-     * Actually send coins, once the user has confirmed.
+     * Actually send coins, called once the user has confirmed, and then let the
+     * user know once it succeeds/fails.
      *
      * @param network the network to send coins over.
-     * @param address the recipient address to send coins to.
-     * @param amount the amount of coins to send.
+     * @param req send request to execute
      */
-    private void doSendCoins(final Network network, final Address address, final Coin amount, final String memo) {
-        final Wallet.SendRequest req = Wallet.SendRequest.to(address, amount);
-
-        req.memo = memo;
-
+    private void doSendCoins(final Network network, final Wallet.SendRequest req) {
         // Prompt for password if the wallet is encrypted
         // TODO: Should have an unlock() method we call here,
         // and uses cached password for ~5 minutes, rather than prompting every
