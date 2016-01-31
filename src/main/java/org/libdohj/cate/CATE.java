@@ -78,7 +78,7 @@ public class CATE extends Application {
         root.getStylesheets().add(DEFAULT_STYLESHEET);
         this.controller = (MainController) loader.getController();
         this.controller.connectTo(NetworkResolver.getParameter("Dogecoin"), dataDir);
-        this.controller.connectTo(NetworkResolver.getParameter("Dogecoin test"), dataDir);
+        // this.controller.connectTo(NetworkResolver.getParameter("Dogecoin test"), dataDir);
 
         NotificationPane notificationPane = new NotificationPane(root);
         this.controller.setNotificationPane(notificationPane);
