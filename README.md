@@ -1,16 +1,14 @@
-CATE
+Cate
 ====
 
-Cross-chain Atomic Trading Engine
+Cate (Cross-chain Atomic Trading Engine) is a multicoin wallet based on the
+bitcoinj and libdohj libraries. It currently supports Bitcoin, Litecoin and
+Dogecoin, and is readily extensible to support any other currencies compatible
+with bitcoinj.
 
-CATE is a multicoin wallet based on the bitcoinj and libdohj libraries.
-It currently supports Bitcoin, Litecoin and Dogecoin, and is readily
-extensible to support any other currencies compatible with bitcoinj.
-
-CATE is currently in development and should not be used outside of the
+Cate is currently in development and should not be used outside of the
 test networks until it has significantly further testing. It is likely
 there are bugs which result in loss of funds.
-
 
 Getting Started
 ---------------
@@ -53,3 +51,10 @@ and in cases where existing code does not conform to those guidelines, please
 raise a pull request to correct the style. Please however raise this as its own
 pull request, do not mix with other pull requests, so it's clear why code has
 been changed.
+
+Roadmap
+-------
+
+The initial release is targeted for the bitcoinj 0.14 release, and will be a
+simple wallet only. Later versions will add functionality for cross-chain trades
+(i.e. the core of a decentralised exchange).
