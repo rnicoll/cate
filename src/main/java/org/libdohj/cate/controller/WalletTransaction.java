@@ -22,6 +22,7 @@ import javafx.beans.property.StringProperty;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
+import org.bitcoinj.utils.MonetaryFormat;
 import org.libdohj.cate.Network;
 import org.libdohj.cate.util.NetworkResolver;
 
@@ -45,12 +46,13 @@ public class WalletTransaction extends Object {
         this.network = network;
         this.transaction = transaction;
         this.balanceChange = balanceChange;
+        final MonetaryFormat monetaryFormatter = network.getParams().getMonetaryFormat();
         dateFormat = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT);
         networkNameProperty = new SimpleStringProperty(NetworkResolver.getName(network.getParams()));
         dateProperty = new SimpleStringProperty(dateFormat.format(transaction.getUpdateTime()));
-        amountProperty = new SimpleStringProperty(balanceChange.toFriendlyString());
+        amountProperty = new SimpleStringProperty(monetaryFormatter.format(balanceChange).toString());
         memoProperty = new SimpleStringProperty(transaction.getMemo());
-        memoProperty.addListener((change) -> {
+        memoProperty.addListener(change -> {
             transaction.setMemo(memoProperty.getValue());
         });
     }

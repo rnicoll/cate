@@ -59,6 +59,7 @@ import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.script.Script;
 import org.bitcoinj.store.BlockStoreException;
+import org.bitcoinj.utils.MonetaryFormat;
 import org.libdohj.cate.controller.MainController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +84,7 @@ public class Network extends WalletAppKit {
     private final BiConsumer<Network, Wallet> registerWalletHook;
     private final Logger logger = LoggerFactory.getLogger(Network.class);
 
-    private final SimpleStringProperty estimatedBalance = new SimpleStringProperty("0");
+    private final SimpleStringProperty estimatedBalance = new SimpleStringProperty("");
     private final SimpleIntegerProperty blocks = new SimpleIntegerProperty(0);
     private final SimpleIntegerProperty blocksLeft = new SimpleIntegerProperty(0);
     /**
@@ -101,6 +102,7 @@ public class Network extends WalletAppKit {
     private final Set<Transaction> seenTransactions = new HashSet<>();
 
     private final Executor networkExecutor;
+    private final MonetaryFormat monetaryFormatter;
 
     /**
      * @param context context this network manages.
@@ -120,11 +122,12 @@ public class Network extends WalletAppKit {
         autoStop = false;
         blockingStartup = true;
         this.registerWalletHook = registerWalletHook;
-        
+
+        monetaryFormatter = context.getParams().getMonetaryFormat();
         addListener(new Service.Listener() {
             @Override
             public void running() {
-                estimatedBalance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toPlainString());
+                estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
                 try {
                     blocks.set(store().getChainHead().getHeight());
                 } catch (BlockStoreException ex) {
@@ -147,7 +150,7 @@ public class Network extends WalletAppKit {
         peerGroup().addDataEventListener(eventBridge);
         peerGroup().addConnectionEventListener(eventBridge);
         chain().addNewBestBlockListener(eventBridge);
-        wallet().addCoinEventListener(eventBridge);
+        wallet().addEventListener(eventBridge);
         registerWalletHook.accept(this, this.wallet());
     }
 
@@ -369,7 +372,7 @@ public class Network extends WalletAppKit {
             if (seenTransactions.add(tx)) {
                 controller.addTransaction(Network.this, tx, prevBalance, newBalance);
             }
-            estimatedBalance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString());
+            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
         }
 
         @Override
@@ -377,24 +380,24 @@ public class Network extends WalletAppKit {
             if (seenTransactions.add(tx)) {
                 controller.addTransaction(Network.this, tx, prevBalance, newBalance);
             }
-            estimatedBalance.set(wallet().getBalance(Wallet.BalanceType.ESTIMATED).toFriendlyString());
+            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
             // TODO: Update the displayed receive address
         }
 
         @Override
         public void onReorganize(Wallet wallet) {
-            estimatedBalance.set(wallet.getBalance(Wallet.BalanceType.ESTIMATED).toPlainString());
+            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
             controller.refreshTransactions(Network.this, wallet);
         }
 
         @Override
         public void onTransactionConfidenceChanged(Wallet wallet, Transaction tx) {
-            estimatedBalance.set(wallet.getBalance(Wallet.BalanceType.ESTIMATED).toPlainString());
+            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
         }
 
         @Override
         public void onWalletChanged(Wallet wallet) {
-            estimatedBalance.set(wallet.getBalance(Wallet.BalanceType.ESTIMATED).toPlainString());
+            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
             controller.refreshTransactions(Network.this, wallet);
         }
 
