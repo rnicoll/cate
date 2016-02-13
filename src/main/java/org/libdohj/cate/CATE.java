@@ -80,7 +80,6 @@ public class CATE extends Application {
         this.controller.connectTo(NetworkResolver.getParameter("Bitcoin"), dataDir);
         this.controller.connectTo(NetworkResolver.getParameter("Litecoin"), dataDir);
         this.controller.connectTo(NetworkResolver.getParameter("Dogecoin"), dataDir);
-        this.controller.connectTo(NetworkResolver.getParameter("Dogecoin test"), dataDir);
 
         NotificationPane notificationPane = new NotificationPane(root);
         this.controller.setNotificationPane(notificationPane);
