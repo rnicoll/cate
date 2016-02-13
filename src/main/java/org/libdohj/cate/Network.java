@@ -144,12 +144,25 @@ public class Network extends WalletAppKit {
         }, networkExecutor);
     }
 
+    protected void onBlocksDownloadedEventListener(Peer peer, Block block, FilteredBlock filteredBlock, int blocksLeft) {
+        this.blocksLeft.set(blocksLeft);
+    }
+
+    protected void onChainDownloadStarted(Peer peer, int blocksLeft) {
+        this.blocksLeft.set(blocksLeft);
+    }
+
+    protected void onNewBestBlock(StoredBlock block) throws VerificationException {
+        Network.this.blocks.set(block.getHeight());
+    }
+
     @Override
     protected void onSetupCompleted() {
         peerGroup().setConnectTimeoutMillis(1000);
-        peerGroup().addDataEventListener(eventBridge);
+        peerGroup().addBlocksDownloadedEventListener(this::onBlocksDownloadedEventListener);
+        peerGroup().addChainDownloadStartedEventListener(this::onChainDownloadStarted);
         peerGroup().addConnectionEventListener(eventBridge);
-        chain().addNewBestBlockListener(eventBridge);
+        chain().addNewBestBlockListener(this::onNewBestBlock);
         wallet().addEventListener(eventBridge);
         registerWalletHook.accept(this, this.wallet());
     }
@@ -322,35 +335,10 @@ public class Network extends WalletAppKit {
         return params.getId();
     }
 
-    public class EventBridge implements NewBestBlockListener, PeerDataEventListener, PeerConnectionEventListener, WalletEventListener {
+    public class EventBridge implements PeerConnectionEventListener, WalletEventListener {
 
         private EventBridge() {
 
-        }
-
-        @Override
-        public void onBlocksDownloaded(Peer peer, Block block, FilteredBlock filteredBlock, int blocksLeft) {
-            Network.this.blocksLeft.set(blocksLeft);
-        }
-
-        @Override
-        public void onChainDownloadStarted(Peer peer, int blocksLeft) {
-            Network.this.blocksLeft.set(blocksLeft);
-        }
-
-        @Override
-        public void notifyNewBestBlock(StoredBlock block) throws VerificationException {
-            Network.this.blocks.set(block.getHeight());
-        }
-
-        @Override
-        public Message onPreMessageReceived(Peer peer, Message m) {
-            return null;
-        }
-
-        @Override
-        public List<Message> getData(Peer peer, GetDataMessage m) {
-            return null;
         }
 
         @Override

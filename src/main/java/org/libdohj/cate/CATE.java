@@ -77,6 +77,8 @@ public class CATE extends Application {
 
         root.getStylesheets().add(DEFAULT_STYLESHEET);
         this.controller = (MainController) loader.getController();
+        this.controller.connectTo(NetworkResolver.getParameter("Bitcoin"), dataDir);
+        this.controller.connectTo(NetworkResolver.getParameter("Litecoin"), dataDir);
         this.controller.connectTo(NetworkResolver.getParameter("Dogecoin"), dataDir);
         this.controller.connectTo(NetworkResolver.getParameter("Dogecoin test"), dataDir);
 
