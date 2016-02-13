@@ -18,7 +18,6 @@ package org.libdohj.cate;
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -36,28 +35,19 @@ import javafx.beans.property.StringProperty;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.Context;
-import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.FilteredBlock;
-import org.bitcoinj.core.GetDataMessage;
 import org.bitcoinj.core.InsufficientMoneyException;
-import org.bitcoinj.core.Message;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Peer;
-import org.bitcoinj.core.PeerAddress;
 import org.bitcoinj.core.StoredBlock;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.VerificationException;
 import org.bitcoinj.core.Wallet;
 import org.bitcoinj.core.Wallet.SendResult;
-import org.bitcoinj.core.listeners.NewBestBlockListener;
-import org.bitcoinj.core.listeners.PeerConnectionEventListener;
-import org.bitcoinj.core.listeners.PeerDataEventListener;
-import org.bitcoinj.core.listeners.WalletEventListener;
 import org.bitcoinj.crypto.KeyCrypter;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.kits.WalletAppKit;
-import org.bitcoinj.script.Script;
 import org.bitcoinj.store.BlockStoreException;
 import org.bitcoinj.utils.MonetaryFormat;
 import org.libdohj.cate.controller.MainController;
@@ -79,7 +69,6 @@ import org.spongycastle.crypto.params.KeyParameter;
  */
 public class Network extends WalletAppKit {
 
-    private final EventBridge eventBridge;
     private final MainController controller;
     private final BiConsumer<Network, Wallet> registerWalletHook;
     private final Logger logger = LoggerFactory.getLogger(Network.class);
@@ -118,7 +107,6 @@ public class Network extends WalletAppKit {
         super(context, directory, "cate_" + context.getParams().getId());
         this.controller = controller;
         this.networkExecutor = networkExecutor;
-        eventBridge = new EventBridge();
         autoStop = false;
         blockingStartup = true;
         this.registerWalletHook = registerWalletHook;
@@ -153,7 +141,44 @@ public class Network extends WalletAppKit {
     }
 
     protected void onNewBestBlock(StoredBlock block) throws VerificationException {
-        Network.this.blocks.set(block.getHeight());
+        this.blocks.set(block.getHeight());
+    }
+
+    protected void onPeerConnected(Peer peer, int peerCount) {
+        this.peerCount.set(peerCount);
+    }
+
+    protected void onPeerDisconnected(Peer peer, int peerCount) {
+        this.peerCount.set(peerCount);
+    }
+
+    protected void onCoinsReceived(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
+        if (seenTransactions.add(tx)) {
+            controller.addTransaction(Network.this, tx, prevBalance, newBalance);
+        }
+        estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
+    }
+
+    protected void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
+        if (seenTransactions.add(tx)) {
+            controller.addTransaction(Network.this, tx, prevBalance, newBalance);
+        }
+        estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
+        // TODO: Update the displayed receive address
+    }
+
+    protected void onReorganize(Wallet wallet) {
+        estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
+        controller.refreshTransactions(Network.this, wallet);
+    }
+
+    protected void onTransactionConfidenceChanged(Wallet wallet, Transaction tx) {
+        estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
+    }
+
+    protected void onWalletChanged(Wallet wallet) {
+        estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
+        controller.refreshTransactions(Network.this, wallet);
     }
 
     @Override
@@ -161,9 +186,14 @@ public class Network extends WalletAppKit {
         peerGroup().setConnectTimeoutMillis(1000);
         peerGroup().addBlocksDownloadedEventListener(this::onBlocksDownloadedEventListener);
         peerGroup().addChainDownloadStartedEventListener(this::onChainDownloadStarted);
-        peerGroup().addConnectionEventListener(eventBridge);
+        peerGroup().addConnectedEventListener(this::onPeerConnected);
+        peerGroup().addDisconnectedEventListener(this::onPeerDisconnected);
         chain().addNewBestBlockListener(this::onNewBestBlock);
-        wallet().addEventListener(eventBridge);
+        wallet().addChangeEventListener(this::onWalletChanged);
+        wallet().addCoinsReceivedEventListener(this::onCoinsReceived);
+        wallet().addCoinsSentEventListener(this::onCoinsSent);
+        wallet().addReorganizeEventListener(this::onReorganize);
+        wallet().addTransactionConfidenceEventListener(this::onTransactionConfidenceChanged);
         registerWalletHook.accept(this, this.wallet());
     }
 
@@ -333,70 +363,5 @@ public class Network extends WalletAppKit {
     @Override
     public String toString() {
         return params.getId();
-    }
-
-    public class EventBridge implements PeerConnectionEventListener, WalletEventListener {
-
-        private EventBridge() {
-
-        }
-
-        @Override
-        public void onPeersDiscovered(Set<PeerAddress> peerAddresses) {
-        }
-
-        @Override
-        public void onPeerConnected(Peer peer, int peerCount) {
-            Network.this.peerCount.set(peerCount);
-        }
-
-        @Override
-        public void onPeerDisconnected(Peer peer, int peerCount) {
-            Network.this.peerCount.set(peerCount);
-        }
-
-        @Override
-        public void onCoinsReceived(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
-            if (seenTransactions.add(tx)) {
-                controller.addTransaction(Network.this, tx, prevBalance, newBalance);
-            }
-            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
-        }
-
-        @Override
-        public void onCoinsSent(Wallet wallet, final Transaction tx, final Coin prevBalance, final Coin newBalance) {
-            if (seenTransactions.add(tx)) {
-                controller.addTransaction(Network.this, tx, prevBalance, newBalance);
-            }
-            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
-            // TODO: Update the displayed receive address
-        }
-
-        @Override
-        public void onReorganize(Wallet wallet) {
-            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
-            controller.refreshTransactions(Network.this, wallet);
-        }
-
-        @Override
-        public void onTransactionConfidenceChanged(Wallet wallet, Transaction tx) {
-            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
-        }
-
-        @Override
-        public void onWalletChanged(Wallet wallet) {
-            estimatedBalance.set(monetaryFormatter.format(wallet().getBalance(Wallet.BalanceType.ESTIMATED)).toString());
-            controller.refreshTransactions(Network.this, wallet);
-        }
-
-        @Override
-        public void onScriptsChanged(Wallet wallet, List<Script> scripts, boolean isAddingScripts) {
-            // Don't care
-        }
-
-        @Override
-        public void onKeysAdded(List<ECKey> keys) {
-            // Don't care
-        }
     }
 }
