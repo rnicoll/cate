@@ -19,6 +19,7 @@ import java.util.Optional;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.TransactionOutput;
 
 
@@ -33,7 +34,8 @@ public class Trade {
     private final Input otherInput;
     private Contract contract;
     private Optional<Long> lockTime = Optional.empty();
-    private Optional<ECKey> leadPublicKey;
+    private final Sha256Hash secretHash;
+    private final ECKey leadPublicKey;
     private Optional<ECKey> otherPublicKey;
     private Optional<TransactionOutput> leadTxOutput;
     private Optional<TransactionOutput> otherTxOutput;
@@ -41,13 +43,14 @@ public class Trade {
     public Trade(final Party leadParty, final Input leadInput,
         final Party otherParty, final Input otherInput,
         final Contract contract,
-        final Optional<ECKey> leadPublicKey, final Optional<ECKey> otherPublicKey,
+        final Sha256Hash secretHash, final ECKey leadPublicKey, final Optional<ECKey> otherPublicKey,
         final Optional<TransactionOutput> leadTxOutput, final Optional<TransactionOutput> otherTxOutput) {
         assert leadParty != null;
         assert leadInput != null;
         assert otherParty != null;
         assert otherInput != null;
         assert contract != null;
+        assert secretHash != null;
         assert leadPublicKey != null;
         assert otherPublicKey != null;
         assert leadTxOutput != null;
@@ -58,6 +61,7 @@ public class Trade {
         this.otherParty = otherParty;
         this.otherInput = otherInput;
         this.contract = contract;
+        this.secretHash = secretHash;
         this.leadPublicKey = leadPublicKey;
         this.otherPublicKey = otherPublicKey;
         this.leadTxOutput = leadTxOutput;
@@ -139,12 +143,8 @@ public class Trade {
      * secure the funding transaction from the other party, so only the lead
      * party can claim it.
      */
-    public Optional<ECKey> getLeadPublicKey() {
+    public ECKey getLeadPublicKey() {
         return leadPublicKey;
-    }
-
-    public void setLeadPublicKey(Optional<ECKey> leadPublicKey) {
-        this.leadPublicKey = leadPublicKey;
     }
 
     /**
@@ -163,7 +163,7 @@ public class Trade {
 
     public Optional<ECKey> getPublicKey(Party onBehalfOf) {
         if (onBehalfOf.equals(leadParty)) {
-            return getLeadPublicKey();
+            return Optional.of(getLeadPublicKey());
         } else {
             return getOtherPublicKey();
         }
@@ -223,6 +223,13 @@ public class Trade {
 
     public void setOtherTxOutput(Optional<TransactionOutput> otherTxOutput) {
         this.otherTxOutput = otherTxOutput;
+    }
+
+    /**
+     * @return the secretHash
+     */
+    public Sha256Hash getSecretHash() {
+        return secretHash;
     }
 
     public class Input {

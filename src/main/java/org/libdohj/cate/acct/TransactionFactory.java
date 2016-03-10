@@ -19,7 +19,6 @@ import java.util.Optional;
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.InsufficientMoneyException;
-import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.Wallet;
 import org.bitcoinj.crypto.TransactionSignature;
@@ -32,8 +31,7 @@ import org.bitcoinj.script.Script;
 public interface TransactionFactory {
     public Transaction buildCompletionTransaction(final Trade trade, final Party onBehalfOf,
         final byte[] secret, final Address address) throws TradeException;
-    public Transaction buildFundTransaction(final Trade trade, final Party onBehalfOf,
-        final Sha256Hash secretHash, final Wallet wallet)
+    public Transaction buildFundTransaction(final Trade trade, final Party onBehalfOf, final Wallet wallet)
             throws InsufficientMoneyException, TradeException;
     /**
      * Build, but do not sign, the refund transaction. This is detached from
@@ -51,8 +49,7 @@ public interface TransactionFactory {
             final Address address)
             throws TradeException;
 
-    public Script buildFundScriptSigKey(final Trade trade, final Party onBehalfOf,
-        final Sha256Hash secretHash)
+    public Script buildFundScriptSigKey(final Trade trade, final Party onBehalfOf)
             throws TradeException;
 
     /**
@@ -92,6 +89,6 @@ public interface TransactionFactory {
             throws TradeException;
 
     public TransactionSignature signTransaction(Trade trade, Party onBehalfOf,
-        Sha256Hash secretHash, Transaction transaction, int inputIndex, ECKey privateKey)
+        Transaction transaction, int inputIndex, ECKey privateKey)
             throws TradeException;
 }

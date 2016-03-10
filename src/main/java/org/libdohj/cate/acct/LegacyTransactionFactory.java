@@ -17,7 +17,6 @@ package org.libdohj.cate.acct;
 
 import java.util.Optional;
 import org.bitcoinj.core.ECKey;
-import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.crypto.TransactionSignature;
 import org.bitcoinj.script.Script;
@@ -32,7 +31,7 @@ import org.bitcoinj.script.ScriptOpCodes;
  */
 public class LegacyTransactionFactory extends AbstractTransactionFactory {
     @Override
-    public Script buildFundScriptSigKey(Trade trade, Party onBehalfOf, Sha256Hash secretHash)
+    public Script buildFundScriptSigKey(Trade trade, Party onBehalfOf)
         throws TradeException {
         final ScriptBuilder builder = new ScriptBuilder();
 
@@ -59,7 +58,7 @@ public class LegacyTransactionFactory extends AbstractTransactionFactory {
         {
             // Secret and single signature
             builder.op(ScriptOpCodes.OP_HASH256);
-            builder.data(secretHash.getReversedBytes());
+            builder.data(trade.getSecretHash().getReversedBytes());
             builder.op(ScriptOpCodes.OP_EQUAL);
         }
         builder.op(ScriptOpCodes.OP_ENDIF);
@@ -75,7 +74,7 @@ public class LegacyTransactionFactory extends AbstractTransactionFactory {
 
         final ScriptBuilder builder = new ScriptBuilder();
         TransactionSignature sig = signTransaction(trade, trade.getOppositeParty(onBehalfOf),
-            Sha256Hash.of(secret), transaction, inputIndex, privateKey);
+            transaction, inputIndex, privateKey);
         builder.data(privateKey.getPubKey());
         builder.data(sig.encodeToBitcoin());
         builder.number(0); // Let the script know we want to provide the secret

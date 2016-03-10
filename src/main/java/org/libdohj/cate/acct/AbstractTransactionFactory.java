@@ -18,7 +18,6 @@ package org.libdohj.cate.acct;
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.InsufficientMoneyException;
-import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.core.Wallet;
@@ -40,11 +39,11 @@ public abstract class AbstractTransactionFactory implements TransactionFactory {
     }
 
     @Override
-    public Transaction buildFundTransaction(Trade trade, Party onBehalfOf, Sha256Hash secretHash, Wallet wallet)
+    public Transaction buildFundTransaction(Trade trade, Party onBehalfOf, Wallet wallet)
         throws InsufficientMoneyException, TradeException {
         final Trade.Input in = trade.getInput(onBehalfOf);
         final Transaction tx = new Transaction(in.getParams());
-        tx.addOutput(in.getAmount(), buildFundScriptSigKey(trade, onBehalfOf, secretHash));
+        tx.addOutput(in.getAmount(), buildFundScriptSigKey(trade, onBehalfOf));
         Wallet.SendRequest req = Wallet.SendRequest.forTx(tx);
         wallet.completeTx(req);
 
@@ -66,11 +65,11 @@ public abstract class AbstractTransactionFactory implements TransactionFactory {
 
     @Override
     public TransactionSignature signTransaction(Trade trade, Party onBehalfOf,
-            Sha256Hash secretHash, Transaction transaction, int inputIndex, ECKey privateKey)
+            Transaction transaction, int inputIndex, ECKey privateKey)
         throws TradeException{
         assert !privateKey.isPubKeyOnly();
 
-        final Script fundScript = buildFundScriptSigKey(trade, onBehalfOf, secretHash);
+        final Script fundScript = buildFundScriptSigKey(trade, onBehalfOf);
         return transaction.calculateSignature(inputIndex,
                 privateKey, fundScript, Transaction.SigHash.ALL, false);
     }
