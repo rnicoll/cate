@@ -15,15 +15,11 @@
  */
 package org.libdohj.cate.acct;
 
-import javax.annotation.Nullable;
-import org.bitcoinj.core.Address;
-import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.InsufficientMoneyException;
-import org.bitcoinj.core.NetworkParameters;
+import java.util.Optional;
+import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.Sha256Hash;
 import org.bitcoinj.core.Transaction;
-import org.bitcoinj.core.TransactionOutput;
-import org.bitcoinj.core.Wallet;
+import org.bitcoinj.crypto.TransactionSignature;
 import org.bitcoinj.script.Script;
 import org.bitcoinj.script.ScriptBuilder;
 import org.bitcoinj.script.ScriptOpCodes;
@@ -34,45 +30,28 @@ import org.bitcoinj.script.ScriptOpCodes;
  *
  * @author Ross Nicoll
  */
-public class LegacyTransactionFactory implements TransactionFactory {
-
+public class LegacyTransactionFactory extends AbstractTransactionFactory {
     @Override
-    public Transaction buildCompletionTransaction(Trade trade, Party onBehalfOf, byte[] secret, Address address) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public Transaction buildFundTransaction(Trade trade, Party onBehalfOf, Sha256Hash secretHash, Wallet wallet)
-        throws InsufficientMoneyException {
-        final Trade.Input in = trade.getInput(onBehalfOf);
-        final Transaction tx = new Transaction(in.getParams());
-        final TransactionOutput out = new TransactionOutput(in.getParams(), tx, in.getAmount(),
-            buildFundOutputScript(trade, onBehalfOf, secretHash).getProgram());
-        Wallet.SendRequest req = Wallet.SendRequest.forTx(tx);
-        wallet.completeTx(req);
-
-        return tx;
-    }
-
-    @Override
-    public Transaction buildRefundTransaction(Trade trade, Party onBehalfOf, Address address) {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
-    }
-
-    @Override
-    public Script buildFundOutputScript(Trade trade, Party onBehalfOf, Sha256Hash secretHash) {
+    public Script buildFundScriptSigKey(Trade trade, Party onBehalfOf, Sha256Hash secretHash)
+        throws TradeException {
         final ScriptBuilder builder = new ScriptBuilder();
 
         builder.op(ScriptOpCodes.OP_DUP);
         builder.op(ScriptOpCodes.OP_HASH160);
-        builder.data(trade.getOppositePublicKey(onBehalfOf).get().getPubKeyHash());
+        final ECKey publicKey = trade
+                .getPublicKey(trade.getOppositeParty(onBehalfOf))
+                .orElseThrow(() -> new NoPublicKeyException(onBehalfOf));
+        final ECKey oppositePublicKey = trade
+                .getPublicKey(trade.getOppositeParty(onBehalfOf))
+                .orElseThrow(() -> new NoPublicKeyException(trade.getOppositeParty(onBehalfOf)));
+        builder.data(oppositePublicKey.getPubKeyHash());
         builder.op(ScriptOpCodes.OP_EQUALVERIFY);
         builder.op(ScriptOpCodes.OP_CHECKSIGVERIFY);
         builder.op(ScriptOpCodes.OP_IF); // Top of stack is not zero, script matches a pair of signatures
         {
             builder.op(ScriptOpCodes.OP_DUP);
             builder.op(ScriptOpCodes.OP_HASH160);
-            builder.data(trade.getPublicKey(onBehalfOf).get().getPubKeyHash());
+            builder.data(publicKey.getPubKeyHash());
             builder.op(ScriptOpCodes.OP_EQUALVERIFY);
             builder.op(ScriptOpCodes.OP_CHECKSIG);
         }
@@ -86,6 +65,51 @@ public class LegacyTransactionFactory implements TransactionFactory {
         builder.op(ScriptOpCodes.OP_ENDIF);
 
         return builder.build();
+    }
+
+    @Override
+    public Script buildCompletionScriptSignature(Trade trade, Party onBehalfOf,
+            Transaction transaction, int inputIndex, ECKey privateKey, byte[] secret)
+            throws TradeException {
+        assert !privateKey.isPubKeyOnly();
+
+        final ScriptBuilder builder = new ScriptBuilder();
+        TransactionSignature sig = signTransaction(trade, trade.getOppositeParty(onBehalfOf),
+            Sha256Hash.of(secret), transaction, inputIndex, privateKey);
+        builder.data(privateKey.getPubKey());
+        builder.data(sig.encodeToBitcoin());
+        builder.number(0); // Let the script know we want to provide the secret
+        builder.data(secret);
+
+        return builder.build();
+    }
+
+    @Override
+    public Script buildRefundScriptSignature(Trade trade, Party onBehalfOf,
+            TransactionSignature mySig, Optional<TransactionSignature> theirSig)
+        throws TradeException {
+        final ECKey oppositePublicKey = trade
+                .getPublicKey(trade.getOppositeParty(onBehalfOf))
+                .orElseThrow(() -> new NoPublicKeyException(trade.getOppositeParty(onBehalfOf)));
+        final ScriptBuilder builder = new ScriptBuilder();
+
+        builder.data(oppositePublicKey.getPubKey());
+        builder.data(mySig.encodeToBitcoin());
+        builder.number(1); // Let the script know we want to provide two signatures
+        builder.data(trade.getPublicKey(onBehalfOf).get().getPubKey());
+        builder.data(theirSig.orElseThrow(() -> new MissingCounterpartySignatureException())
+                .encodeToBitcoin());
+
+        return builder.build();
+    }
+
+    @Override
+    public void completeRefundTransaction(Trade trade, Party onBehalfOf,
+            Transaction transaction, TransactionSignature mySig,
+            Optional<TransactionSignature> theirSig)
+        throws TradeException {
+        // TODO: Validate the signatures
+        transaction.getInputs().get(0).setScriptSig(this.buildRefundScriptSignature(trade, onBehalfOf, mySig, theirSig));
     }
     
 }

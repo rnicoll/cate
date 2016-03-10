@@ -19,6 +19,7 @@ import java.util.Optional;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.core.TransactionOutput;
 
 
 /**
@@ -34,11 +35,14 @@ public class Trade {
     private Optional<Long> lockTime = Optional.empty();
     private Optional<ECKey> leadPublicKey;
     private Optional<ECKey> otherPublicKey;
+    private Optional<TransactionOutput> leadTxOutput;
+    private Optional<TransactionOutput> otherTxOutput;
 
     public Trade(final Party leadParty, final Input leadInput,
         final Party otherParty, final Input otherInput,
         final Contract contract,
-        final Optional<ECKey> leadPublicKey, final Optional<ECKey> otherPublicKey) {
+        final Optional<ECKey> leadPublicKey, final Optional<ECKey> otherPublicKey,
+        final Optional<TransactionOutput> leadTxOutput, final Optional<TransactionOutput> otherTxOutput) {
         assert leadParty != null;
         assert leadInput != null;
         assert otherParty != null;
@@ -46,6 +50,8 @@ public class Trade {
         assert contract != null;
         assert leadPublicKey != null;
         assert otherPublicKey != null;
+        assert leadTxOutput != null;
+        assert otherTxOutput != null;
 
         this.leadParty = leadParty;
         this.leadInput = leadInput;
@@ -54,6 +60,8 @@ public class Trade {
         this.contract = contract;
         this.leadPublicKey = leadPublicKey;
         this.otherPublicKey = otherPublicKey;
+        this.leadTxOutput = leadTxOutput;
+        this.otherTxOutput = otherTxOutput;
     }
 
     /**
@@ -153,14 +161,6 @@ public class Trade {
         this.otherPublicKey = otherPublicKey;
     }
 
-    public Optional<ECKey> getOppositePublicKey(Party onBehalfOf) {
-        if (onBehalfOf.equals(leadParty)) {
-            return getOtherPublicKey();
-        } else {
-            return getLeadPublicKey();
-        }
-    }
-
     public Optional<ECKey> getPublicKey(Party onBehalfOf) {
         if (onBehalfOf.equals(leadParty)) {
             return getLeadPublicKey();
@@ -175,6 +175,54 @@ public class Trade {
         } else {
             return getOtherInput();
         }
+    }
+
+    public Party getOppositeParty(Party onBehalfOf) {
+        if (onBehalfOf.equals(leadParty)) {
+            return getOtherParty();
+        } else {
+            return getLeadParty();
+        }
+    }
+
+    /**
+     * Get the transaction output for the funding transaction.
+     *
+     * @param onBehalfOf the party who created the funding transaction.
+     * @return a transaction output.
+     */
+    public Optional<TransactionOutput> getFundTransactionOutput(Party onBehalfOf) {
+        if (onBehalfOf.equals(leadParty)) {
+            return getLeadTxOutput();
+        } else {
+            return getOtherTxOutput();
+        }
+    }
+
+    /**
+     * Get the transaction output from the lead party's funding transaction.
+     *
+     * @return the transaction output from the lead party's funding transaction.
+     */
+    public Optional<TransactionOutput> getLeadTxOutput() {
+        return leadTxOutput;
+    }
+
+    public void setLeadTxOutput(Optional<TransactionOutput> leadTxOutput) {
+        this.leadTxOutput = leadTxOutput;
+    }
+
+    /**
+     * Get the transaction output from the other party's funding transaction.
+     *
+     * @return the transaction output from the other party's funding transaction.
+     */
+    public Optional<TransactionOutput> getOtherTxOutput() {
+        return otherTxOutput;
+    }
+
+    public void setOtherTxOutput(Optional<TransactionOutput> otherTxOutput) {
+        this.otherTxOutput = otherTxOutput;
     }
 
     public class Input {
