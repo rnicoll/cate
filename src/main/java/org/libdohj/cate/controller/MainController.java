@@ -55,6 +55,7 @@ import javafx.stage.WindowEvent;
 import javafx.util.StringConverter;
 
 import com.google.common.util.concurrent.Service;
+import javafx.event.EventType;
 
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.CATE;
@@ -169,13 +170,8 @@ public class MainController {
             }
         });
 
-        sendButton.setOnAction((ActionEvent event) -> {
-            sendCoinsOnUIThread(event);
-        });
-
-        menuExit.setOnAction((ActionEvent event) -> {
-            MainController.this.stop();
-        });
+        sendButton.setOnAction(this::sendCoinsOnUIThread);
+        menuExit.setOnAction(this::stop);
     }
 
     /**
@@ -635,7 +631,15 @@ public class MainController {
 
     /**
      * Stops the controller, which includes shutting down the various networks
-     * it is managing.
+     * it is managing. Convenience method for use in lambda expressions.
+     */
+    public void stop(final ActionEvent event) {
+        stop();
+    }
+
+    /**
+     * Stops the controller, which includes shutting down the various networks
+     * it is managing. Convenience method for use in lambda expressions.
      */
     public void stop(final WindowEvent event) {
         stop();
@@ -650,6 +654,11 @@ public class MainController {
             return;
         }
         stopping = true;
+
+        // Stop any further event handling from occurring
+        receiveSelector.setOnAction(null);
+        sendButton.setOnAction(null);
+        
         final Alert alert = new Alert(Alert.AlertType.INFORMATION, resources.getString("alert.shuttingDown"));
         alert.setTitle(resources.getString("alert.shuttingDown.title"));
         alert.getButtonTypes().clear();
