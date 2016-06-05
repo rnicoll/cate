@@ -70,9 +70,10 @@ import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutPoint;
 import org.bitcoinj.core.TransactionOutput;
-import org.bitcoinj.core.Wallet;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
+import org.bitcoinj.wallet.SendRequest;
+import org.bitcoinj.wallet.Wallet;
 
 import org.libdohj.cate.Network;
 import org.slf4j.Logger;
@@ -459,7 +460,7 @@ public class MainController {
         final Address address;
         final Coin amount;
         final Network network = (Network) sendSelector.getValue();
-        final Wallet.SendRequest req;
+        final SendRequest req;
 
         try {
             address = Address.fromBase58(network.getParams(), sendAddress.getText());
@@ -481,7 +482,7 @@ public class MainController {
                 alert.showAndWait();
                 return;
             }
-            req = Wallet.SendRequest.to(address, amount);
+            req = SendRequest.to(address, amount);
         } catch (IllegalArgumentException ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("sendCoins.amountError.msg"));
             alert.setTitle(resources.getString("sendCoins.amountError.title"));
@@ -513,7 +514,7 @@ public class MainController {
      * @param network the network to send coins over.
      * @param req send request to execute
      */
-    private void doSendCoins(final Network network, final Wallet.SendRequest req) {
+    private void doSendCoins(final Network network, final SendRequest req) {
         // Prompt for password if the wallet is encrypted
         // TODO: Should have an unlock() method we call here,
         // and uses cached password for ~5 minutes, rather than prompting every

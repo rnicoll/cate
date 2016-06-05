@@ -42,14 +42,14 @@ import org.bitcoinj.core.Peer;
 import org.bitcoinj.core.StoredBlock;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.VerificationException;
-import org.bitcoinj.core.Wallet;
-import org.bitcoinj.core.Wallet.SendResult;
 import org.bitcoinj.crypto.KeyCrypter;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.kits.WalletAppKit;
 import org.bitcoinj.store.BlockStoreException;
 import org.bitcoinj.utils.MonetaryFormat;
+import org.bitcoinj.wallet.SendRequest;
+import org.bitcoinj.wallet.Wallet;
 import org.libdohj.cate.controller.MainController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -318,14 +318,14 @@ public class Network extends WalletAppKit {
      * @param timeout timeout on queueing the work request
      * @param timeUnit time unit for the timeout
      */
-    public void sendCoins(final Wallet.SendRequest req,
-            final Consumer<SendResult> onSuccess,
+    public void sendCoins(final SendRequest req,
+            final Consumer<Wallet.SendResult> onSuccess,
             final Consumer<Coin> onInsufficientFunds,
             final Consumer<KeyCrypterException> onWalletLocked,
             final long timeout, final TimeUnit timeUnit) {
         this.networkExecutor.execute((Runnable) () -> {
             // TODO: Calculate fees in a network-appropriate way
-            final SendResult result;
+            final Wallet.SendResult result;
             try {
                 result = Network.this.wallet().sendCoins(req);
                 onSuccess.accept(result);
