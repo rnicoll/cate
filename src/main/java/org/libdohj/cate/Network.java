@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, 2016 Ross Nicoll.
+ * Copyright 2015, 2016, 2021 Ross Nicoll.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ import org.bitcoinj.wallet.Wallet;
 import org.libdohj.cate.controller.MainController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 /**
  * Class which manages incoming events and knows which network they apply to. In

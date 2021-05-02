@@ -1,0 +1,67 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.6'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.0.9'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+group = 'org.libdohj'
+
+version = '0.15-SNAPSHOT'
+archivesBaseName = 'libdohj-core'
+
+dependencies {
+    implementation 'org.bitcoinj:bitcoinj-core:0.15.10'
+    implementation 'org.libdohj:libdohj:0.15-SNAPSHOT'
+    implementation 'org.slf4j:slf4j-api:1.7.30'
+    implementation 'com.google.guava:guava:30.0-jre'
+    implementation 'net.java.dev.jna:jna:5.8.0'
+    implementation group: 'org.controlsfx', name: 'controlsfx', version: '11.1.0'
+
+    testImplementation 'junit:junit:4.13.1'
+    testImplementation 'org.slf4j:slf4j-jdk14:1.7.30'
+}
+
+sourceCompatibility = 11
+
+javafx {
+    version = "15.0.1"
+    modules = [ 'javafx.controls', 'javafx.fxml' ]
+}
+
+test {
+    testLogging {
+        events "failed"
+        exceptionFormat "full"
+    }
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    archiveClassifier  = 'javadoc'
+    from javadoc.destinationDir
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+    archiveClassifier  = 'sources'
+    from sourceSets.main.allSource
+}
+
+artifacts {
+    archives sourcesJar
+    archives javadocJar
+}

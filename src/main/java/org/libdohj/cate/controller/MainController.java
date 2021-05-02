@@ -1,5 +1,5 @@
 /*
- * Copyright 2015, 2016 Ross Nicoll.
+ * Copyright 2015, 2016, 2021 Ross Nicoll.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,8 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.ResourceBundle;
 
-import com.sun.deploy.uitoolkit.impl.fx.HostServicesFactory;
-import com.sun.javafx.application.HostServicesDelegate;
+import com.sun.javafx.application.Application;
+import com.sun.javafx.application.HostServices;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -60,7 +60,7 @@ import javafx.event.EventType;
 import org.controlsfx.control.NotificationPane;
 import org.libdohj.cate.CATE;
 import org.libdohj.cate.util.*;
-import org.spongycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
@@ -275,7 +275,7 @@ public class MainController {
     }
 
     private void openBlockExplorer(WalletTransaction item) {
-        HostServicesDelegate hostServices = HostServicesFactory.getInstance(CATE.getInstance());
+        HostServices hostServices = cate.getHostServices();
         hostServices.showDocument(BlockExplorerResolver.getUrl(item));
     }
 
