@@ -15,33 +15,9 @@
  */
 package org.libdohj.cate;
 
-import java.io.File;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-
-import javafx.beans.property.SimpleIntegerProperty;
-import javafx.beans.property.SimpleBooleanProperty;
-
 import com.google.common.util.concurrent.Service;
-import java.util.function.BiConsumer;
-import javafx.beans.property.BooleanProperty;
-import javafx.beans.property.IntegerProperty;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.StringProperty;
-import org.bitcoinj.core.Block;
-import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.Context;
-import org.bitcoinj.core.FilteredBlock;
-import org.bitcoinj.core.InsufficientMoneyException;
-import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.core.Peer;
-import org.bitcoinj.core.StoredBlock;
-import org.bitcoinj.core.Transaction;
-import org.bitcoinj.core.VerificationException;
+import javafx.beans.property.*;
+import org.bitcoinj.core.*;
 import org.bitcoinj.crypto.KeyCrypter;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
@@ -50,10 +26,19 @@ import org.bitcoinj.store.BlockStoreException;
 import org.bitcoinj.utils.MonetaryFormat;
 import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.Wallet;
+import org.bouncycastle.crypto.params.KeyParameter;
 import org.libdohj.cate.controller.MainController;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.bouncycastle.crypto.params.KeyParameter;
+
+import java.io.File;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * Class which manages incoming events and knows which network they apply to. In
@@ -94,24 +79,24 @@ public class Network extends WalletAppKit {
     private final MonetaryFormat monetaryFormatter;
 
     /**
-     * @param context context this network manages.
+     * @param params the network parameters for this network.
      * @param controller the controller to push events back to.
      * @param directory the data directory to store the wallet and SPV chain in.
      * @param networkExecutor executor for tasks belonging to this network.
      * Must exist after the lifecycle of network (so that service status listeners
      * can be attached to it).
      */
-    public Network(final Context context, final MainController controller,
+    public Network(final NetworkParameters params, final MainController controller,
             final File directory, final Executor networkExecutor,
             final BiConsumer<Network, Wallet> registerWalletHook) {
-        super(context, directory, "cate_" + context.getParams().getId());
+        super(params, directory, "cate_" + params.getId());
         this.controller = controller;
         this.networkExecutor = networkExecutor;
         autoStop = false;
         blockingStartup = true;
         this.registerWalletHook = registerWalletHook;
 
-        monetaryFormatter = context.getParams().getMonetaryFormat();
+        monetaryFormatter = params.getMonetaryFormat();
         addListener(new Service.Listener() {
             @Override
             public void running() {

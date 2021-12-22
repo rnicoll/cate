@@ -15,23 +15,8 @@
  */
 package org.libdohj.cate.controller;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.List;
-import java.util.Optional;
-import java.util.SortedSet;
-import java.util.TreeSet;
-import java.util.ResourceBundle;
-
-import com.sun.javafx.application.Application;
-import com.sun.javafx.application.HostServices;
+import com.google.common.util.concurrent.Service;
+import javafx.application.HostServices;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
@@ -39,46 +24,30 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.ContextMenu;
-import javafx.scene.control.ComboBox;
-import javafx.scene.control.MenuItem;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.TableRow;
-import javafx.scene.control.TableView;
-import javafx.scene.control.TextField;
 import javafx.scene.Node;
+import javafx.scene.control.*;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
 import javafx.util.StringConverter;
-
-import com.google.common.util.concurrent.Service;
-import javafx.event.EventType;
-
-import org.controlsfx.control.NotificationPane;
-import org.libdohj.cate.CATE;
-import org.libdohj.cate.util.*;
-import org.bouncycastle.crypto.params.KeyParameter;
-
-import org.bitcoinj.core.Address;
-import org.bitcoinj.core.AddressFormatException;
-import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.Context;
-import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.core.Transaction;
-import org.bitcoinj.core.TransactionInput;
-import org.bitcoinj.core.TransactionOutPoint;
-import org.bitcoinj.core.TransactionOutput;
+import org.bitcoinj.core.*;
 import org.bitcoinj.crypto.KeyCrypterException;
 import org.bitcoinj.crypto.KeyCrypterScrypt;
 import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.Wallet;
-
+import org.bouncycastle.crypto.params.KeyParameter;
+import org.controlsfx.control.NotificationPane;
+import org.libdohj.cate.CATE;
 import org.libdohj.cate.Network;
+import org.libdohj.cate.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Base window from which the rest of CATE is launched. Lists any active
@@ -162,7 +131,13 @@ public class MainController {
                     final Wallet wallet = network.wallet();
                     final Address address = wallet.currentReceiveAddress();
                     Platform.runLater(() -> {
-                        myAddress.setText(address.toBase58());
+                        if (address instanceof LegacyAddress) {
+                            // We know we want the base58 version
+                            myAddress.setText(((LegacyAddress)address).toBase58());
+                        } else {
+                            // Hopefully toString() does the right thing?!?
+                            myAddress.setText(address.toString());
+                        }
                     });
                 } else {
                     myAddress.setText("");
@@ -186,7 +161,7 @@ public class MainController {
         final Context context = new Context(params);
         final NetworkThreadFactory threadFactory = new NetworkThreadFactory(context);
         final ExecutorService executor = Executors.newSingleThreadExecutor(threadFactory);
-        final Network network = new Network(context, this, dataDir, executor, this::registerWallet);
+        final Network network = new Network(params, this, dataDir, executor, this::registerWallet);
         final StringProperty statusProperty = new SimpleStringProperty("Starting");
 
         threadFactory.setUncaughtExceptionHandler(buildUncaughtExceptionHandler(network));
@@ -459,7 +434,7 @@ public class MainController {
         final SendRequest req;
 
         try {
-            address = Address.fromBase58(network.getParams(), sendAddress.getText());
+            address = LegacyAddress.fromBase58(network.getParams(), sendAddress.getText());
         } catch (AddressFormatException ex) {
             Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("sendCoins.addressError.msg")
                     + ex.getMessage());
@@ -781,8 +756,8 @@ public class MainController {
         this.cate = cate;
     }
 
-    private class NetworkDetail extends Object {
-        private StringProperty statusProperty;
+    private static class NetworkDetail extends Object {
+        private final StringProperty statusProperty;
         private ExecutorService executor;
 
         private NetworkDetail(final ExecutorService executor, final StringProperty statusProperty) {
@@ -797,8 +772,15 @@ public class MainController {
         }
 
         @Override
-        public String toString(Network network) {
-            return NetworkResolver.getName(network.getParams());
+        public String toString(final Network network) {
+            if (network == null) {
+                return "(null)";
+            }
+            final String name = NetworkResolver.getName(network.getParams());
+            if (name == null) {
+                throw new RuntimeException("Could not resolve network " + network.getParams());
+            }
+            return name;
         }
 
         @Override

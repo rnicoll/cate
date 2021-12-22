@@ -44,24 +44,15 @@ public class CATE extends Application {
     private static CATE instance;
 
     private static final String APPLICATION_NAME_FOLDER = "CATE";
-    private static Logger logger = Logger.getLogger(CATE.class.getName());
+    private static final Logger logger = Logger.getLogger(CATE.class.getName());
     private static final DataDirFactory dataDirFactory = new DataDirFactory(APPLICATION_NAME_FOLDER);
 
     private static File dataDir = null;
 
-    private MainController controller;
-    private ExecutorService listenerExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService listenerExecutor = Executors.newSingleThreadExecutor();
 
     public CATE() {
         instance = this;
-    }
-
-    /**
-     * Get the current Application instance
-     * @return The current Application/CATE instance
-     */
-    public static CATE getInstance() {
-        return instance;
     }
 
     @Override
@@ -76,16 +67,16 @@ public class CATE extends Application {
         Parent root = loader.load();
 
         root.getStylesheets().add(DEFAULT_STYLESHEET);
-        this.controller = (MainController) loader.getController();
-        this.controller.connectTo(NetworkResolver.getParameter("Bitcoin"), dataDir);
-        this.controller.connectTo(NetworkResolver.getParameter("Litecoin"), dataDir);
-        this.controller.connectTo(NetworkResolver.getParameter("Dogecoin"), dataDir);
+        MainController controller = loader.getController();
+        controller.connectTo(NetworkResolver.getParameter("Bitcoin"), dataDir);
+        controller.connectTo(NetworkResolver.getParameter("Litecoin"), dataDir);
+        controller.connectTo(NetworkResolver.getParameter("Dogecoin"), dataDir);
 
         NotificationPane notificationPane = new NotificationPane(root);
-        this.controller.setNotificationPane(notificationPane);
-        this.controller.setCate(this);
+        controller.setNotificationPane(notificationPane);
+        controller.setCate(this);
 
-        primaryStage.setOnCloseRequest(this.controller::stop);
+        primaryStage.setOnCloseRequest(controller::stop);
 
         primaryStage.setTitle(resources.getString("application.title"));
         primaryStage.setScene(new Scene(notificationPane, 800, 500));

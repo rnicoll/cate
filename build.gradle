@@ -12,7 +12,7 @@ plugins {
     id 'java'
     id 'maven-publish'
     id 'application'
-    id 'org.openjfx.javafxplugin' version '0.0.9'
+    id 'org.openjfx.javafxplugin' version '0.0.10'
 }
 
 repositories {
@@ -31,13 +31,17 @@ dependencies {
     implementation 'org.slf4j:slf4j-api:1.7.30'
     implementation 'com.google.guava:guava:30.0-jre'
     implementation 'net.java.dev.jna:jna:5.8.0'
-    implementation group: 'org.controlsfx', name: 'controlsfx', version: '11.1.0'
+    implementation group: 'org.controlsfx', name: 'controlsfx', version: '11.1.1'
 
     testImplementation 'junit:junit:4.13.1'
     testImplementation 'org.slf4j:slf4j-jdk14:1.7.30'
 }
 
 sourceCompatibility = 11
+
+application {
+    mainClassName = "org.libdohj.cate.CATE"
+}
 
 javafx {
     version = "15.0.1"

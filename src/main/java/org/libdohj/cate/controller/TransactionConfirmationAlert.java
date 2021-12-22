@@ -15,19 +15,20 @@
  */
 package org.libdohj.cate.controller;
 
-import java.util.ResourceBundle;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
-
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.LegacyAddress;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.utils.MonetaryFormat;
 import org.libdohj.cate.CATE;
+
+import java.util.ResourceBundle;
 
 /**
  * @author Ross Nicoll
@@ -66,7 +67,11 @@ public class TransactionConfirmationAlert extends Alert {
             amount.setText(format.format(newVal).toString());
         });
         addressProperty().addListener((observable, oldVal, newVal) -> {
-            address.setText(newVal.toBase58());
+            if (newVal instanceof LegacyAddress) {
+                address.setText(((LegacyAddress)newVal).toBase58());
+            } else {
+                address.setText(newVal.toString());
+            }
         });
 
         grid.setHgap(MainController.DIALOG_HGAP);
