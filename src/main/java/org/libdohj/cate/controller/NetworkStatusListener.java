@@ -8,10 +8,13 @@ import org.libdohj.cate.Network;
 import java.util.ResourceBundle;
 import java.util.concurrent.ExecutorService;
 
+/**
+ * NetworkStatusListener wraps a string property which is updated as the network changes status
+ * (starting, running, stopping, etc.)
+ */
 class NetworkStatusListener extends Service.Listener {
     private final MainController controller;
     private final ResourceBundle resources;
-    private final ExecutorService executor;
     private final Network network;
     private final SimpleStringProperty status;
 
@@ -21,7 +24,6 @@ class NetworkStatusListener extends Service.Listener {
                                  Network network) {
         this.controller = controller;
         this.resources = resources;
-        this.executor = executor;
         this.network = network;
         this.status = new SimpleStringProperty("Starting");
     }
@@ -43,7 +45,7 @@ class NetworkStatusListener extends Service.Listener {
 
     @Override
     public void terminated(Service.State from) {
-        executor.shutdown();
+        this.controller.removeNetwork(this.network);
         this.status.setValue(resources.getString("walletList.networkStatus.terminated"));
     }
 

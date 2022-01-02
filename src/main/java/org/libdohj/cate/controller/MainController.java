@@ -48,6 +48,7 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Base window from which the rest of CATE is launched. Lists any active
@@ -99,13 +100,18 @@ public class MainController {
 
     private NotificationPane notificationPane;
 
-    /** All networks this controller is aware of */
+    /**
+     * All networks this controller is aware of
+     */
     private final ObservableList<Network> networks = FXCollections.observableArrayList();
-    /** All networks which are in starting or running state */
+    /**
+     * All networks which are in starting or running state
+     */
     private final ObservableList<Network> activeNetworks = FXCollections.observableArrayList();
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
     private final Map<Network, NetworkDetail> networkDetails = new HashMap<>();
     private KeyCrypterScrypt keyCrypter;
+    private final ExecutorService networkStatusExecutor = Executors.newSingleThreadExecutor();
 
     private final Logger logger = LoggerFactory.getLogger(MainController.class);
     private CATE cate;
@@ -113,7 +119,7 @@ public class MainController {
 
     @FXML
     public void initialize() {
-        
+
         receiveSelector.setItems(activeNetworks);
         sendSelector.setItems(activeNetworks);
         receiveSelector.setConverter(new WalletToNetworkNameConvertor());
@@ -133,7 +139,7 @@ public class MainController {
                     Platform.runLater(() -> {
                         if (address instanceof LegacyAddress) {
                             // We know we want the base58 version
-                            myAddress.setText(((LegacyAddress)address).toBase58());
+                            myAddress.setText(((LegacyAddress) address).toBase58());
                         } else {
                             // Hopefully toString() does the right thing?!?
                             myAddress.setText(address.toString());
@@ -152,7 +158,7 @@ public class MainController {
     /**
      * Connect to the specified network.
      *
-     * @param params network parameters for the relay network to connect to.
+     * @param params  network parameters for the relay network to connect to.
      * @param dataDir directory to store data files in.
      * @return the service that has been started. Can be used to test start
      * completes successfully.
@@ -178,7 +184,7 @@ public class MainController {
 
     private void initializeTransactionList() {
         txList.setItems(transactions);
-        txList.setRowFactory(value ->{
+        txList.setRowFactory(value -> {
             final TableRow<WalletTransaction> row = new TableRow<>();
             final ContextMenu rowMenu = new ContextMenu();
             final MenuItem transactionIdItem = new MenuItem(resources.getString("menuItem.copyTransactionId"));
@@ -225,7 +231,7 @@ public class MainController {
         } catch (IOException e) {
             logger.error(resources.getString("alert.txDetailsError"), e);
             Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("alert.txDetailsError")
-                + e.getMessage());
+                    + e.getMessage());
             alert.setTitle(resources.getString("internalError.title"));
             alert.showAndWait();
         }
@@ -274,10 +280,10 @@ public class MainController {
     /**
      * Add a transaction to those displayed by this controller.
      *
-     * @param network network the transaction is from.
-     * @param tx the underlying transaction to add.
+     * @param network     network the transaction is from.
+     * @param tx          the underlying transaction to add.
      * @param prevBalance previous wallet balance.
-     * @param newBalance new wallet balance.
+     * @param newBalance  new wallet balance.
      */
     public void addTransaction(Network network, Transaction tx, Coin prevBalance, Coin newBalance) {
         // TODO: Transaction lists should be aggregated from listed held by each
@@ -296,7 +302,7 @@ public class MainController {
      */
     private void decryptWalletOnUIThread(final Network network) {
         if (!network.getEncryptedStateProperty().getValue()) {
-            Alert alert = new Alert(Alert.AlertType.ERROR,resources.getString("alert.walletUnencrypted.msg"));
+            Alert alert = new Alert(Alert.AlertType.ERROR, resources.getString("alert.walletUnencrypted.msg"));
             alert.setTitle(resources.getString("alert.walletUnencrypted.title"));
             alert.showAndWait();
             return;
@@ -383,6 +389,7 @@ public class MainController {
             }
         });
     }
+
     public static final int DIALOG_VGAP = 10;
     public static final int DIALOG_HGAP = 10;
 
@@ -425,7 +432,7 @@ public class MainController {
         }
 
         final TransactionConfirmationAlert confirmSend
-            = new TransactionConfirmationAlert(network.getParams(), this.resources);
+                = new TransactionConfirmationAlert(network.getParams(), this.resources);
 
         // TODO: Show details of fees and total including fees
         confirmSend.setAddress(address);
@@ -434,11 +441,11 @@ public class MainController {
         confirmSend.initOwner(((Node) event.getTarget()).getScene().getWindow());
 
         confirmSend.showAndWait()
-            .filter(response -> response == ButtonType.OK)
-            .ifPresent(response -> {
-                req.memo = confirmSend.getMemo().trim();
-                doSendCoins(network, req);
-        });
+                .filter(response -> response == ButtonType.OK)
+                .ifPresent(response -> {
+                    req.memo = confirmSend.getMemo().trim();
+                    doSendCoins(network, req);
+                });
     }
 
     /**
@@ -446,7 +453,7 @@ public class MainController {
      * user know once it succeeds/fails.
      *
      * @param network the network to send coins over.
-     * @param req send request to execute
+     * @param req     send request to execute
      */
     private void doSendCoins(final Network network, final SendRequest req) {
         // Prompt for password if the wallet is encrypted
@@ -475,8 +482,8 @@ public class MainController {
                         alert.setHeaderText(resources.getString("doSendCoins.moneyError.head"));
                         alert.setContentText(resources.getString("doSendCoins.moneyError.msg1")
                                 + (missing == null
-                                        ? resources.getString("doSendCoins.moneyError.msg2")
-                                        : network.format(missing))
+                                ? resources.getString("doSendCoins.moneyError.msg2")
+                                : network.format(missing))
                                 + resources.getString("doSendCoins.moneyError.msg3"));
 
                         alert.showAndWait();
@@ -532,11 +539,9 @@ public class MainController {
         // We don't use lambdas here because we're returning a value based on
         // the evaluation
         final Optional<String> password = passwordDialog.showAndWait();
-        if (password.isPresent()) {
-            return network.getKeyFromPassword(password.get());
-        } else {
-            return null;
-        }
+        return password
+                .map(network::getKeyFromPassword)
+                .orElse(null);
     }
 
     /**
@@ -596,22 +601,26 @@ public class MainController {
         // Stop any further event handling from occurring
         receiveSelector.setOnAction(null);
         sendButton.setOnAction(null);
-        
+
         final Alert alert = new Alert(Alert.AlertType.INFORMATION, resources.getString("alert.shuttingDown"));
         alert.setTitle(resources.getString("alert.shuttingDown.title"));
         alert.getButtonTypes().clear();
-        Platform.runLater(() -> {
-            alert.show();
-        });
-        networks.stream()
-            .forEach(network -> {
-                logger.info("Shutting down " + network);
-                network.stopAsync();
-            });
+        Platform.runLater(alert::show);
+        networks.forEach(network -> {
+                    logger.info("Shutting down " + network);
+                    network.stopAsync();
+                });
+        final long timeoutSeconds = 3;
         new Thread(() -> {
-            networks.stream()
-                .forEach(service -> service.awaitTerminated());
+            networks.forEach(service -> {
+                        try {
+                            service.awaitTerminated(timeoutSeconds, TimeUnit.SECONDS);
+                        } catch (TimeoutException e) {
+                            logger.error("Network " + service.getParams().getId() + " failed to shut down");
+                        }
+                    });
             alert.hide();
+            this.networkStatusExecutor.shutdown();
             Platform.exit();
         }).start();
     }
@@ -626,7 +635,7 @@ public class MainController {
     public Thread.UncaughtExceptionHandler buildUncaughtExceptionHandler(final Network network) {
         return (Thread thread, Throwable thrwbl) -> {
             logger.error("Internal error from network "
-                + network.getParams().getId(), thrwbl);
+                    + network.getParams().getId(), thrwbl);
             if (thrwbl instanceof Exception) {
                 Platform.runLater(() -> {
                     Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -647,8 +656,8 @@ public class MainController {
      * Handle a network service failing.
      *
      * @param network the service which failed.
-     * @param from the status the service was in before it failed.
-     * @param thrwbl the exception causing the service to fail.
+     * @param from    the status the service was in before it failed.
+     * @param thrwbl  the exception causing the service to fail.
      */
     public void onNetworkFailed(Network network, Service.State from, Throwable thrwbl) {
         networks.remove(network);
@@ -730,8 +739,8 @@ public class MainController {
         private ExecutorService executor;
 
         private NetworkDetail(final ExecutorService executor, final StringProperty statusProperty) {
-           this.executor = executor;
-           this.statusProperty = statusProperty;
+            this.executor = executor;
+            this.statusProperty = statusProperty;
         }
     }
 
@@ -755,7 +764,7 @@ public class MainController {
         @Override
         public Network fromString(String string) {
             final NetworkParameters params = NetworkResolver.getParameter(string);
-            for (Network network: networks) {
+            for (Network network : networks) {
                 if (network.getParams().equals(params)) {
                     return network;
                 }
