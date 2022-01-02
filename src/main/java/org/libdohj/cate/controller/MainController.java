@@ -49,6 +49,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Base window from which the rest of CATE is launched. Lists any active
@@ -111,14 +112,16 @@ public class MainController {
     private final ObservableList<WalletTransaction> transactions = FXCollections.observableArrayList();
     private final Map<Network, NetworkDetail> networkDetails = new HashMap<>();
     private KeyCrypterScrypt keyCrypter;
+    private MainAlertHelper alertHelper;
     private final ExecutorService networkStatusExecutor = Executors.newSingleThreadExecutor();
 
     private final Logger logger = LoggerFactory.getLogger(MainController.class);
     private CATE cate;
-    private volatile boolean stopping = false;
+    private final AtomicBoolean stopping = new AtomicBoolean(false);
 
     @FXML
     public void initialize() {
+        this.alertHelper = new MainAlertHelper(resources);
 
         receiveSelector.setItems(activeNetworks);
         sendSelector.setItems(activeNetworks);
@@ -290,9 +293,9 @@ public class MainController {
         // network.
         // For now we do the actual modification on the UI thread to avoid
         // race conditions
-        Platform.runLater(() -> {
-            transactions.add(0, new WalletTransaction(network, tx, newBalance.subtract(prevBalance)));
-        });
+        Platform.runLater(() ->
+            transactions.add(0, new WalletTransaction(network, tx, newBalance.subtract(prevBalance)))
+        );
     }
 
     /**
@@ -355,39 +358,20 @@ public class MainController {
         dialog.setTitle(resources.getString("dialogEncrypt.title"));
         dialog.setHeaderText(resources.getString("dialogEncrypt.msg"));
 
-        dialog.showAndWait().ifPresent(value -> {
-            if (value == null) {
-                Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                            resources.getString("alert.encryptWallet.mismatchMsg"));
-                    alert.setTitle(resources.getString("alert.encryptWallet.errorTitle"));
-                    alert.showAndWait();
-                });
-            } else {
-                network.encrypt(value, o -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.INFORMATION,
-                                resources.getString("alert.encryptWallet.successMsg"));
-                        alert.setTitle(resources.getString("alert.encryptWallet.successTitle"));
-                        alert.showAndWait();
-                    });
-                }, t -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.WARNING,
-                                resources.getString("alert.encryptWallet.noticeMsg"));
-                        alert.setTitle(resources.getString("alert.encryptWallet.noticeTitle"));
-                        alert.showAndWait();
-                    });
-                }, t -> {
-                    Platform.runLater(() -> {
-                        Alert alert = new Alert(Alert.AlertType.ERROR,
-                                t.getMessage());
-                        alert.setTitle(resources.getString("alert.encryptWallet.errorTitle"));
-                        alert.showAndWait();
-                    });
-                }, NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
-            }
-        });
+        dialog.showAndWait().ifPresentOrElse(value -> encryptWallet(network, value), () -> Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION,
+                    resources.getString("alert.encryptWallet.mismatchMsg"));
+            alert.setTitle(resources.getString("alert.encryptWallet.errorTitle"));
+            alert.showAndWait();
+        }));
+    }
+
+    private void encryptWallet(final Network network, final String value) {
+        network.encrypt(value,
+                o -> Platform.runLater(this.alertHelper::showSuccessModalDialogOnUIThread),
+                t -> Platform.runLater(this.alertHelper::showWalletNotEncryptedModalDialogOnUIThread),
+                t -> Platform.runLater(() -> this.alertHelper.showEncryptionErrorModalDialogOnUIThread(t)),
+                NETWORK_PUSH_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     }
 
     public static final int DIALOG_VGAP = 10;
@@ -538,8 +522,7 @@ public class MainController {
 
         // We don't use lambdas here because we're returning a value based on
         // the evaluation
-        final Optional<String> password = passwordDialog.showAndWait();
-        return password
+        return passwordDialog.showAndWait()
                 .map(network::getKeyFromPassword)
                 .orElse(null);
     }
@@ -592,11 +575,11 @@ public class MainController {
      * Stops the controller, which includes shutting down the various networks
      * it is managing.
      */
-    private void stop() {
-        if (stopping) {
+    void stop() {
+        // If we're already stopping, ignore the second call
+        if (stopping.getAndSet(true)) {
             return;
         }
-        stopping = true;
 
         // Stop any further event handling from occurring
         receiveSelector.setOnAction(null);
@@ -612,11 +595,11 @@ public class MainController {
                 });
         final long timeoutSeconds = 3;
         new Thread(() -> {
-            networks.forEach(service -> {
+            networks.forEach(network -> {
                         try {
-                            service.awaitTerminated(timeoutSeconds, TimeUnit.SECONDS);
+                            network.awaitTerminated(timeoutSeconds, TimeUnit.SECONDS);
                         } catch (TimeoutException e) {
-                            logger.error("Network " + service.getParams().getId() + " failed to shut down");
+                            logger.error("Network " + network.getParams().getId() + " failed to shut down");
                         }
                     });
             alert.hide();
@@ -633,23 +616,7 @@ public class MainController {
      * @return an uncaught exception handler.
      */
     public Thread.UncaughtExceptionHandler buildUncaughtExceptionHandler(final Network network) {
-        return (Thread thread, Throwable thrwbl) -> {
-            logger.error("Internal error from network "
-                    + network.getParams().getId(), thrwbl);
-            if (thrwbl instanceof Exception) {
-                Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.ERROR);
-                    alert.setTitle(resources.getString("internalError.title"));
-                    alert.setContentText(thrwbl.getMessage());
-                    alert.showAndWait();
-                    // TODO: Shut down and de-register the wallet from currently
-                    // running
-                });
-            } else {
-                // Fatal, begin shutdown
-                MainController.this.stop();
-            }
-        };
+        return new NetworkExceptionHandler(this, this.resources, network);
     }
 
     /**
