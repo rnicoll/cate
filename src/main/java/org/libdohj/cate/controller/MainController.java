@@ -162,47 +162,18 @@ public class MainController {
         final NetworkThreadFactory threadFactory = new NetworkThreadFactory(context);
         final ExecutorService executor = Executors.newSingleThreadExecutor(threadFactory);
         final Network network = new Network(params, this, dataDir, executor, this::registerWallet);
-        final StringProperty statusProperty = new SimpleStringProperty("Starting");
 
         threadFactory.setUncaughtExceptionHandler(buildUncaughtExceptionHandler(network));
         networks.add(network);
 
         // Add a listener to shut down the executor service once the network service
         // it's responsible for terminates.
-        network.addListener(new Service.Listener() {
-            @Override
-            public void starting() {
-                statusProperty.setValue(resources.getString("walletList.networkStatus.starting"));
-            }
+        final NetworkStatusListener networkStatus = new NetworkStatusListener(this, this.resources, executor, network);
+        network.addListener(networkStatus, executor);
 
-            @Override
-            public void running() {
-                statusProperty.setValue(resources.getString("walletList.networkStatus.running"));
-            }
+        networkDetails.put(network, new NetworkDetail(executor, networkStatus.getStatus()));
 
-            @Override
-            public void stopping(Service.State from) {
-                statusProperty.setValue(resources.getString("walletList.networkStatus.stopping"));
-            }
-
-            @Override
-            public void terminated(Service.State from) {
-                executor.shutdown();
-                Platform.runLater(() -> { activeNetworks.remove(network); });
-                statusProperty.setValue(resources.getString("walletList.networkStatus.terminated"));
-            }
-
-            @Override
-            public void failed(Service.State from, Throwable failure) {
-                statusProperty.setValue(resources.getString("walletList.networkStatus.failed"));
-            }
-        }, executor);
-
-        final NetworkDetail detail = new NetworkDetail(executor, statusProperty);
-        networkDetails.put(network, detail);
-
-        final Service service = network.startAsync();
-        return service;
+        return network.startAsync();
     }
 
     private void initializeTransactionList() {
@@ -235,18 +206,10 @@ public class MainController {
 
             return row;
         });
-        txNetworkColumn.setCellValueFactory(dataFeatures -> {
-            return dataFeatures.getValue().networkNameProperty();
-        });
-        txDateColumn.setCellValueFactory(dataFeatures -> {
-            return dataFeatures.getValue().dateProperty();
-        });
-        txAmountColumn.setCellValueFactory(dataFeatures -> {
-            return dataFeatures.getValue().amountProperty();
-        });
-        txMemoColumn.setCellValueFactory(dataFeatures -> {
-            return dataFeatures.getValue().memoProperty();
-        });
+        txNetworkColumn.setCellValueFactory(dataFeatures -> dataFeatures.getValue().networkNameProperty());
+        txDateColumn.setCellValueFactory(dataFeatures -> dataFeatures.getValue().dateProperty());
+        txAmountColumn.setCellValueFactory(dataFeatures -> dataFeatures.getValue().amountProperty());
+        txMemoColumn.setCellValueFactory(dataFeatures -> dataFeatures.getValue().memoProperty());
     }
 
     private void openBlockExplorer(WalletTransaction item) {
@@ -754,6 +717,12 @@ public class MainController {
 
     public void setCate(CATE cate) {
         this.cate = cate;
+    }
+
+    protected void removeNetwork(Network network) {
+        Platform.runLater(() -> {
+            activeNetworks.remove(network);
+        });
     }
 
     private static class NetworkDetail extends Object {
